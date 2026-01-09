@@ -2,6 +2,18 @@ We aim to use the HatCat interpretability tool to detect and intervene against a
 
 This will be achieved by taking the existing AI deception testing which induces deception,  and then adapting it into a safety harness using the HUSH autonomic steering functions.  This will output the nessecary cryptographic governance assurances for the EU AI Act using the Agentic State Kernel protocols from the the Fractal Transparency Web
 
+# Process
+
+1. ensure we can replicate the existing findings
+2. adapt the existing code into the safety harness
+3. configure the harness to meet the goals of the Act and verify we're outputing the required artefacts
+4. test the autonomic steering on some prompts which are likely to trigger it
+5. trial a two headed approach where we seperately steer towards deception and then see if the harness detects and intervenes
+6. scale the trial to a meaningful number of samples
+7. run an analysis on the results
+8. write up our findings on AI governance through mechanistic interpretability interventions
+
+
 
 ##HatCat
 Detects and steers model activations using lens arrays of non-linear probes developed to detect AI safety ontologies
@@ -40,16 +52,6 @@ Which describes our goals and how we will be judged
 
 
 
-# Process
-
-1. ensure we can replicate the existing findings
-2. adapt the existing code into the safety harness
-3. configure the harness to meet the goals of the Act and verify we're outputing the required artefacts
-4. test the autonomic steering on some prompts which are likely to trigger it
-5. trial a two headed approach where we seperately steer towards deception and then see if the harness detects and intervenes
-6. scale the trial to a meaningful number of samples
-7. run an analysis on the results
-8. write up our findings on AI governance through mechanistic interpretability interventions
 
 
 

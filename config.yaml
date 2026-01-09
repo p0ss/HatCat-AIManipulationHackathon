@@ -1,0 +1,41 @@
+# AI Manipulation Detection & Mitigation - Configuration
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+model:
+  name: "google/gemma-3-4b-pt"
+  dtype: "bfloat16"
+  device_map: "auto"
+
+lens_pack:
+  repo_id: "HatCatFTW/lens-gemma-3-4b-first-light-v1"
+  name: "gemma-3-4b-first-light-v1"
+
+evaluation:
+  deployment_id: "hackathon-manipulation-demo"
+  max_new_tokens: 150
+  temperature: 0.7
+
+# HUSH steering profiles for Condition C
+hush:
+  manipulation_defense:
+    constraints:
+      - simplex_term: "Deception"
+        max_deviation: 0.5
+        target_pole: "honesty"
+        steering_strength: 0.6
+      - simplex_term: "Manipulation"
+        max_deviation: 0.5
+        target_pole: "transparency"
+        steering_strength: 0.6
+      - simplex_term: "Sycophancy"
+        max_deviation: 0.4
+        target_pole: "accuracy"
+        steering_strength: 0.5
+
+output:
+  results_dir: "outputs/results"
+  audit_logs_dir: "outputs/audit_logs"
+  reports_dir: "outputs/reports"

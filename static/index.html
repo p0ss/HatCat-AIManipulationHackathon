@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Manipulation Detection & Mitigation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    <style>
+        .tab-btn { @apply px-6 py-3 text-gray-400 hover:text-white border-b-2 border-transparent transition-colors; }
+        .tab-btn.active { @apply text-white border-blue-500; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .status-indicator { @apply w-3 h-3 rounded-full inline-block mr-2; }
+        .status-ok { @apply bg-green-500; }
+        .status-pending { @apply bg-yellow-500; }
+        .status-error { @apply bg-red-500; }
+        .card { @apply bg-gray-800 rounded-lg p-6 shadow-lg; }
+        .btn-primary { @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors; }
+        .btn-secondary { @apply bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors; }
+        .progress-bar { @apply h-2 bg-gray-700 rounded-full overflow-hidden; }
+        .progress-fill { @apply h-full bg-blue-500 transition-all duration-300; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <h1 class="text-2xl font-bold text-white">AI Manipulation Detection & Mitigation</h1>
+            <p class="text-sm text-gray-400 mt-1">Hackathon Demo - HatCat FTW + EU AI Act Compliance</p>
+        </div>
+    </header>
+
+    <!-- Tabs -->
+    <nav class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 flex">
+            <button class="tab-btn active" data-tab="setup">Setup</button>
+            <button class="tab-btn" data-tab="evaluation">Evaluation</button>
+            <button class="tab-btn" data-tab="results">Results</button>
+            <button class="tab-btn" data-tab="compliance">Compliance</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Setup Tab -->
+        <div id="tab-setup" class="tab-content active">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Status Card -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">System Status</h2>
+                    <div class="space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span><span class="status-indicator status-pending" id="status-hatcat"></span>HatCat Installed</span>
+                            <span class="text-sm text-gray-400" id="status-hatcat-text">Checking...</span>
+                        </div>
+                        <div id="hatcat-install-row" class="hidden ml-5 mt-1">
+                            <button class="btn-secondary text-xs py-1 px-3" id="btn-install-hatcat" onclick="installHatCat()">
+                                Install HatCat
+                            </button>
+                            <span class="text-xs text-gray-500 ml-2" id="hatcat-path-text"></span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span><span class="status-indicator status-pending" id="status-model"></span>Model Loaded</span>
+                            <span class="text-sm text-gray-400" id="status-model-text">Not loaded</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span><span class="status-indicator status-pending" id="status-lens"></span>Lens Pack Ready</span>
+                            <span class="text-sm text-gray-400" id="status-lens-text">Not loaded</span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span><span class="status-indicator status-pending" id="status-gpu"></span>GPU Available</span>
+                            <span class="text-sm text-gray-400" id="status-gpu-text">Checking...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- GPU Info Card -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">Hardware</h2>
+                    <div id="gpu-info" class="text-gray-400">
+                        Loading hardware information...
+                    </div>
+                </div>
+
+                <!-- Download Model Card -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">1. Download Model</h2>
+                    <p class="text-gray-400 mb-4">Download the Gemma 3 4B model from HuggingFace.</p>
+                    <div class="progress-bar mb-2" id="model-progress-bar">
+                        <div class="progress-fill" id="model-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4" id="model-progress-text">Ready to download</p>
+                    <button class="btn-primary w-full flex items-center justify-center gap-2" id="btn-download-model" onclick="downloadModel()">
+                        <svg id="model-spinner" class="animate-spin h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span id="model-btn-text">Download Model</span>
+                    </button>
+                </div>
+
+                <!-- Download Lens Pack Card -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">2. Download Lens Pack</h2>
+                    <p class="text-gray-400 mb-4">Download the manipulation detection lens pack.</p>
+                    <div class="progress-bar mb-2" id="lens-progress-bar">
+                        <div class="progress-fill" id="lens-progress-fill" style="width: 0%"></div>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4" id="lens-progress-text">Ready to download</p>
+                    <button class="btn-primary w-full flex items-center justify-center gap-2" id="btn-download-lens" onclick="downloadLens()">
+                        <svg id="lens-spinner" class="animate-spin h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span id="lens-btn-text">Download Lens Pack</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Setup Complete Banner (hidden until ready) -->
+            <div id="setup-complete-banner" class="card mt-6 bg-green-900/30 border border-green-500 hidden">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <div>
+                            <h3 class="text-lg font-semibold text-green-400">Setup Complete!</h3>
+                            <p class="text-gray-400">Model and lens pack are ready. You can now run the A/B/C evaluation.</p>
+                        </div>
+                    </div>
+                    <button class="btn-primary" onclick="goToEvaluation()">
+                        Go to Evaluation →
+                    </button>
+                </div>
+            </div>
+
+            <!-- Download Console -->
+            <div class="card mt-6">
+                <h2 class="text-xl font-semibold mb-4">Download Console</h2>
+                <div id="download-console" class="bg-gray-900 rounded p-4 h-48 overflow-y-auto font-mono text-sm">
+                    <p class="text-gray-500">Waiting for downloads...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Evaluation Tab -->
+        <div id="tab-evaluation" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Episode Selection -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">Episodes</h2>
+                    <div id="episode-list" class="space-y-2">
+                        Loading episodes...
+                    </div>
+                    <button class="btn-secondary mt-4 text-sm" onclick="selectAllEpisodes()">Select All</button>
+                </div>
+
+                <!-- Condition Selection -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">Conditions</h2>
+                    <div class="space-y-3">
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" id="cond-A" checked class="mt-1">
+                            <div>
+                                <div class="font-medium text-red-400">A: Baseline</div>
+                                <div class="text-sm text-gray-400">No monitoring or intervention</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" id="cond-B" checked class="mt-1">
+                            <div>
+                                <div class="font-medium text-yellow-400">B: Monitor-only</div>
+                                <div class="text-sm text-gray-400">HAT + ASK logging, no steering</div>
+                            </div>
+                        </label>
+                        <label class="flex items-start gap-3 cursor-pointer">
+                            <input type="checkbox" id="cond-C" checked class="mt-1">
+                            <div>
+                                <div class="font-medium text-green-400">C: Full Harness</div>
+                                <div class="text-sm text-gray-400">HAT + ASK + HUSH steering</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Run Control -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">Run Evaluation</h2>
+                    <button class="btn-primary w-full text-lg py-3" id="btn-run" onclick="runEvaluation()">
+                        Start Evaluation
+                    </button>
+                    <button class="btn-secondary w-full mt-3 hidden" id="btn-abort" onclick="abortEvaluation()">
+                        Abort
+                    </button>
+                    <div class="mt-4">
+                        <div class="progress-bar" id="eval-progress-bar">
+                            <div class="progress-fill" id="eval-progress-fill" style="width: 0%"></div>
+                        </div>
+                        <p class="text-sm text-gray-400 mt-2" id="eval-progress-text">Ready to run</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Progress -->
+            <div class="card mt-6">
+                <h2 class="text-xl font-semibold mb-4">Live Progress</h2>
+                <div id="live-progress" class="bg-gray-900 rounded p-4 h-64 overflow-y-auto font-mono text-sm">
+                    <p class="text-gray-500">Waiting to start...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Tab -->
+        <div id="tab-results" class="tab-content">
+            <div class="card mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">A/B/C Comparison</h2>
+                    <select id="run-selector" class="bg-gray-700 border border-gray-600 rounded px-3 py-1" onchange="loadResults()">
+                        <option value="">Select run...</option>
+                    </select>
+                </div>
+                <div id="comparison-chart" class="h-96"></div>
+            </div>
+
+            <div class="card">
+                <h2 class="text-xl font-semibold mb-4">Intervention Activity (Condition C)</h2>
+                <div id="intervention-chart" class="h-80"></div>
+            </div>
+
+            <!-- Summary Stats -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
+                <div class="card text-center">
+                    <div class="text-3xl font-bold text-red-400" id="stat-baseline">-</div>
+                    <div class="text-sm text-gray-400">Baseline Rate</div>
+                </div>
+                <div class="card text-center">
+                    <div class="text-3xl font-bold text-yellow-400" id="stat-monitor">-</div>
+                    <div class="text-sm text-gray-400">Monitor Rate</div>
+                </div>
+                <div class="card text-center">
+                    <div class="text-3xl font-bold text-green-400" id="stat-harness">-</div>
+                    <div class="text-sm text-gray-400">Harness Rate</div>
+                </div>
+                <div class="card text-center">
+                    <div class="text-3xl font-bold text-blue-400" id="stat-reduction">-</div>
+                    <div class="text-sm text-gray-400">Reduction</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compliance Tab -->
+        <div id="tab-compliance" class="tab-content">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- EU AI Act Mapping -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">EU AI Act Compliance</h2>
+                    <div id="eu-mapping" class="space-y-4">
+                        Loading...
+                    </div>
+                </div>
+
+                <!-- Export -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold mb-4">Export Reports</h2>
+                    <p class="text-gray-400 mb-4">Generate compliance reports and audit logs.</p>
+                    <div class="space-y-3">
+                        <button class="btn-primary w-full" onclick="exportReport('eu_ai_act')">
+                            Export EU AI Act Report (HTML)
+                        </button>
+                        <button class="btn-secondary w-full" onclick="exportReport('json')">
+                            Export Audit Log (JSON)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Log Viewer -->
+            <div class="card mt-6">
+                <h2 class="text-xl font-semibold mb-4">Audit Log Viewer</h2>
+                <select id="audit-log-selector" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 mb-4" onchange="loadAuditLog()">
+                    <option value="">Select audit log...</option>
+                </select>
+                <pre id="audit-log-content" class="bg-gray-900 rounded p-4 overflow-auto max-h-96 text-sm">
+Select an audit log to view its contents.
+                </pre>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
