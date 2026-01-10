@@ -1,6 +1,6 @@
 # AI Manipulation Detection & Mitigation
 
-A demonstration system for detecting and mitigating manipulative behaviors in AI language models, built on the [HatCat FTW](https://github.com/HatCatFTW/HatCat) interpretability framework.
+A demonstration system for detecting and mitigating manipulative behaviors in AI language models, built on the [HatCat](https://github.com/p0ss/HatCat) interpretability framework.
 
 ## Overview
 
