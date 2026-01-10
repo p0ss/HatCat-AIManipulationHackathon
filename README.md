@@ -1,6 +1,6 @@
 # AI Manipulation Detection & Mitigation
 
-A demonstration system for detecting and mitigating manipulative behaviors in AI language models, built on the [HatCat FTW](https://github.com/HatCatFTW/HatCat) interpretability framework.
+A demonstration system for detecting and mitigating manipulative behaviors in AI language models, built on the [HatCat](https://github.com/p0ss/HatCat) interpretability framework.
 
 ## Overview
 
@@ -97,7 +97,7 @@ EU AI Act compliance features:
 │  └──────────────────────────────────────────────────────┘   │
 │                                                              │
 ├─────────────────────────────────────────────────────────────┤
-│                    HatCat FTW Stack                          │
+│                      HatCat Stack                            │
 │  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐            │
 │  │  HAT   │  │  CAT   │  │  ASK   │  │  HUSH  │            │
 │  │ Hidden │  │Conjoined│  │Agentic │  │ Safety │            │
@@ -199,7 +199,7 @@ hush:
 
 ## Acknowledgments
 
-Built on the [HatCat FTW](https://github.com/HatCatFTW/HatCat) interpretability framework.
+Built on the [HatCat](https://github.com/p0ss/HatCat) interpretability framework.
 
 ## License
 
