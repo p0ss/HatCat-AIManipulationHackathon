@@ -263,7 +263,6 @@ class HatCatEvaluationRunner:
 
         # Apply hook to target layer
         handles = apply_steering_hooks(
-            model=self.model,
             hooks=[(model_layers[target_layer_idx], hook)],
         )
 
