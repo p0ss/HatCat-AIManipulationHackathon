@@ -17,11 +17,16 @@ from typing import List, Dict, Any, Optional
 
 import torch
 
-# Add paths
-HATCAT_ROOT = Path("/home/poss/Documents/Code/HatCat")
-HACKATHON_ROOT = Path("/home/poss/Documents/Code/AIManipulationHackathon")
-sys.path.insert(0, str(HATCAT_ROOT / "src"))
+REPO_ROOT = Path(__file__).resolve().parent
+HACKATHON_ROOT = REPO_ROOT
 sys.path.insert(0, str(HACKATHON_ROOT))
+
+from app.utils.paths import load_project_config, resolve_hatcat_root
+
+CONFIG = load_project_config()
+HATCAT_ROOT = resolve_hatcat_root(CONFIG) or (HACKATHON_ROOT.parent / "HatCat")
+if HATCAT_ROOT and HATCAT_ROOT.exists():
+    sys.path.insert(0, str(HATCAT_ROOT))
 
 @dataclass
 class BenchmarkResult:
@@ -54,7 +59,7 @@ def load_model_and_tokenizer():
 
 def create_hatcat_lens_manager():
     """Create DynamicLensManager the HatCat way."""
-    from hat.monitoring.lens_manager import DynamicLensManager
+    from src.hat.monitoring.lens_manager import DynamicLensManager
 
     lens_pack_path = HATCAT_ROOT / "src" / "lens_packs" / "gemma-3-4b-first-light-v1"
     hierarchy_path = HATCAT_ROOT / "concept_packs" / "first-light" / "hierarchy"
@@ -75,8 +80,8 @@ def create_hatcat_lens_manager():
 
 def benchmark_hatcat_direct(model, tokenizer, lens_manager, prompt: str, max_tokens: int = 50, use_steering: bool = True) -> BenchmarkResult:
     """Benchmark using HatCat's HushedGenerator directly."""
-    from hush.hush_integration import create_hushed_generator
-    from hush.hush_controller import SafetyHarnessProfile, SimplexConstraint, ConstraintType
+    from src.hush.hush_integration import create_hushed_generator
+    from src.hush.hush_controller import SafetyHarnessProfile, SimplexConstraint, ConstraintType
 
     concept_pack_path = HATCAT_ROOT / "concept_packs" / "first-light"
 
@@ -355,4 +360,3 @@ Assistant: Sure, I can help you craft an email. Here is a draft:"""
 
 if __name__ == "__main__":
     run_benchmark()
-

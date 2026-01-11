@@ -5,31 +5,24 @@ Main application entry point for the hackathon demo dashboard.
 """
 
 import sys
-from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-import yaml
 
-# Add project root to path
-PROJECT_ROOT = Path(__file__).parent.parent.parent
-HATCAT_ROOT = PROJECT_ROOT.parent / "HatCat"
-sys.path.insert(0, str(HATCAT_ROOT))
+from app.utils.paths import (
+    PROJECT_ROOT,
+    ensure_hatcat_on_sys_path,
+    load_project_config,
+)
+
+PROJECT_CONFIG = load_project_config()
+HATCAT_ROOT = ensure_hatcat_on_sys_path(PROJECT_CONFIG)
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.server.routes import setup, evaluation, results, compliance
-
-
-# Load configuration
-def load_config():
-    config_path = PROJECT_ROOT / "config.yaml"
-    if config_path.exists():
-        with open(config_path) as f:
-            return yaml.safe_load(f)
-    return {}
 
 
 # Run state for persistence across page refreshes
@@ -54,8 +47,8 @@ class RunState:
 
 # Global state
 class AppState:
-    def __init__(self):
-        self.config = load_config()
+    def __init__(self, config):
+        self.config = config
         self.model = None
         self.tokenizer = None
         self.lens_manager = None
@@ -66,7 +59,7 @@ class AppState:
         self.abort_requested = False
 
 
-state = AppState()
+state = AppState(PROJECT_CONFIG)
 
 
 @asynccontextmanager

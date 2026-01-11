@@ -1,5 +1,8 @@
 # AI Manipulation Detection & Mitigation - Configuration
 
+# Optional: set hatcat_path if HatCat isn't checked out at ../HatCat
+# hatcat_path: "/opt/HatCat"
+
 server:
   host: "0.0.0.0"
   port: 8080

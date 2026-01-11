@@ -6,23 +6,27 @@ import asyncio
 import json
 import sys
 import torch
-from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-# Ensure HatCat is in path before any HatCat imports
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-HATCAT_ROOT = (PROJECT_ROOT.parent / "HatCat").resolve()
+# Shared path helpers
+from app.utils.paths import (
+    PROJECT_ROOT,
+    ensure_hatcat_on_sys_path,
+    load_project_config,
+    resolve_hatcat_root,
+)
+
+CONFIG = load_project_config()
+HATCAT_ROOT = resolve_hatcat_root(CONFIG)
+
 
 def _add_hatcat_to_path():
     """Add HatCat src directory to sys.path for immediate use."""
-    hatcat_src = HATCAT_ROOT
-    if str(hatcat_src) not in sys.path:
-        sys.path.insert(0, str(hatcat_src))
-    # Also try adding as if it were installed (Poetry style)
-    return hatcat_src.exists()
+    ensure_hatcat_on_sys_path(CONFIG)
+    return bool(HATCAT_ROOT and HATCAT_ROOT.exists())
 
 def check_hatcat_installed():
     """Check if HatCat is installed as a package."""
@@ -43,6 +47,9 @@ def install_hatcat():
     """Try to install HatCat as an editable package."""
     import subprocess
     import importlib
+
+    if not HATCAT_ROOT:
+        return False, "HatCat path not configured. Set HATCAT_ROOT env var or hatcat_path in config.yaml."
 
     if not HATCAT_ROOT.exists():
         return False, f"HatCat not found at {HATCAT_ROOT}"
@@ -112,14 +119,14 @@ async def get_status():
 
     # Check HatCat installation
     hatcat_linked = check_hatcat_installed()
-    hatcat_path_exists = HATCAT_ROOT.exists()
+    hatcat_path_exists = bool(HATCAT_ROOT and HATCAT_ROOT.exists())
 
     return {
         "model_ready": state.model_loaded,
         "lens_ready": state.lens_loaded,
         "hatcat_linked": hatcat_linked,
         "hatcat_path_exists": hatcat_path_exists,
-        "hatcat_path": str(HATCAT_ROOT),
+        "hatcat_path": str(HATCAT_ROOT) if HATCAT_ROOT else None,
         "gpu_available": gpu_available,
         "gpu_name": gpu_name,
         "vram_gb": round(vram_gb, 1),
@@ -240,7 +247,8 @@ async def lens_download_generator() -> AsyncGenerator[str, None]:
             yield f"data: {json.dumps({'type': 'progress', 'percent': 20, 'message': 'Registry module loaded'})}\n\n"
         except ImportError as ie:
             yield f"data: {json.dumps({'type': 'error', 'message': f'Failed to import HatCat registry: {ie}'})}\n\n"
-            yield f"data: {json.dumps({'type': 'status', 'message': 'Try running: pip install -e ../HatCat'})}\n\n"
+            recommended_path = str(HATCAT_ROOT or '<your-hatcat-path>')
+            yield f"data: {json.dumps({'type': 'status', 'message': f'Try running: pip install -e {recommended_path}'})}\n\n"
             return
 
         await asyncio.sleep(0.1)
@@ -254,13 +262,16 @@ async def lens_download_generator() -> AsyncGenerator[str, None]:
 
         # Use existing local lens pack if available (much faster than downloading)
         # The actual lens pack with .pt files is in src/lens_packs/
-        local_pack_path = HATCAT_ROOT / "src" / "lens_packs" / "gemma-3-4b-first-light-v1"
-        local_hierarchy_path = HATCAT_ROOT / "concept_packs" / "first-light" / "hierarchy"
+        local_pack_path = None
+        local_hierarchy_path = None
+        if HATCAT_ROOT and HATCAT_ROOT.exists():
+            local_pack_path = HATCAT_ROOT / "src" / "lens_packs" / "gemma-3-4b-first-light-v1"
+            local_hierarchy_path = HATCAT_ROOT / "concept_packs" / "first-light" / "hierarchy"
 
-        if local_pack_path.exists():
+        if local_pack_path and local_pack_path.exists():
             yield f"data: {json.dumps({'type': 'progress', 'percent': 50, 'message': f'Using local lens pack: {local_pack_path}'})}\n\n"
             lens_pack_path = local_pack_path
-            hierarchy_path = local_hierarchy_path if local_hierarchy_path.exists() else None
+            hierarchy_path = local_hierarchy_path if local_hierarchy_path and local_hierarchy_path.exists() else None
         else:
             # Fall back to download
             repo_id = lens_config.get("repo_id", "HatCatFTW/lens-gemma-3-4b-first-light-v1")

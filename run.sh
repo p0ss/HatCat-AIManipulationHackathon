@@ -5,8 +5,49 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# HatCat (production) - synced from HatCatDev
-HATCAT_DIR="$SCRIPT_DIR/../HatCat"
+# Allow overriding the HatCat checkout location via env vars
+DEFAULT_HATCAT_DIR="$SCRIPT_DIR/../HatCat"
+HATCAT_DIR="${HATCAT_DIR:-${HATCAT_ROOT:-$DEFAULT_HATCAT_DIR}}"
+export HATCAT_ROOT="$HATCAT_DIR"
+
+# Allow overriding host/port from env or config.yaml (if PyYAML available)
+CONFIG_SERVER_HOST=""
+CONFIG_SERVER_PORT=""
+if command -v python3 >/dev/null 2>&1; then
+    CONFIG_VALUES=$(python3 - <<'PY'
+cfg_host = ""
+cfg_port = ""
+try:
+    import pathlib
+    import yaml  # type: ignore
+
+    config_path = pathlib.Path(__file__).resolve().parent / "config.yaml"
+    if config_path.exists():
+        data = yaml.safe_load(config_path.read_text()) or {}
+        server_cfg = data.get("server", {}) or {}
+        cfg_host = str(server_cfg.get("host", ""))
+        cfg_port = str(server_cfg.get("port", ""))
+except Exception:
+    pass
+
+print(cfg_host)
+print(cfg_port)
+PY
+)
+    IFS=$'\n' read -r CONFIG_SERVER_HOST CONFIG_SERVER_PORT <<EOF
+${CONFIG_VALUES}
+EOF
+fi
+
+DEFAULT_SERVER_HOST=${DEFAULT_SERVER_HOST:-0.0.0.0}
+DEFAULT_SERVER_PORT=${DEFAULT_SERVER_PORT:-8080}
+SERVER_HOST="${SERVER_HOST:-${CONFIG_SERVER_HOST:-$DEFAULT_SERVER_HOST}}"
+SERVER_PORT="${SERVER_PORT:-${CONFIG_SERVER_PORT:-$DEFAULT_SERVER_PORT}}"
+DASHBOARD_HOST_DISPLAY="$SERVER_HOST"
+if [ "$DASHBOARD_HOST_DISPLAY" = "0.0.0.0" ] || [ "$DASHBOARD_HOST_DISPLAY" = "::" ]; then
+    DASHBOARD_HOST_DISPLAY="127.0.0.1"
+fi
+DASHBOARD_URL="http://${DASHBOARD_HOST_DISPLAY}:${SERVER_PORT}"
 VENV_DIR="$SCRIPT_DIR/.venv"
 
 echo "=========================================="
@@ -61,7 +102,7 @@ else:
 echo "[5/5] Launching dashboard..."
 echo ""
 echo "=========================================="
-echo "Dashboard URL: http://localhost:8080"
+echo "Dashboard URL: $DASHBOARD_URL"
 echo "=========================================="
 echo ""
 echo "Press Ctrl+C to stop the server"
@@ -69,12 +110,12 @@ echo ""
 
 # Open browser (platform-specific, non-blocking)
 if command -v xdg-open &> /dev/null; then
-    (sleep 2 && xdg-open "http://localhost:8080") &
+    (sleep 2 && xdg-open "$DASHBOARD_URL") &
 elif command -v open &> /dev/null; then
-    (sleep 2 && open "http://localhost:8080") &
+    (sleep 2 && open "$DASHBOARD_URL") &
 fi
 
 # Start server
 cd "$SCRIPT_DIR"
 export PYTHONPATH="$HATCAT_DIR:$SCRIPT_DIR:$PYTHONPATH"
-python -m uvicorn app.server.app:app --host 0.0.0.0 --port 8080
+python -m uvicorn app.server.app:app --host "$SERVER_HOST" --port "$SERVER_PORT"

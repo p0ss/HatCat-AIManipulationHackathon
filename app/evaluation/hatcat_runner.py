@@ -13,15 +13,18 @@ from datetime import datetime
 
 import torch
 
+from app.utils.paths import load_project_config, resolve_hatcat_root
+
 # Add HatCat to path
-HATCAT_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "HatCat"
-if HATCAT_ROOT.exists() and str(HATCAT_ROOT / "src") not in sys.path:
-    sys.path.insert(0, str(HATCAT_ROOT / "src"))
+_config = load_project_config()
+HATCAT_ROOT = resolve_hatcat_root(_config)
+if HATCAT_ROOT and HATCAT_ROOT.exists() and str(HATCAT_ROOT) not in sys.path:
+    sys.path.insert(0, str(HATCAT_ROOT))
 
 # Import HatCat components directly
-from hush.hush_integration import create_hushed_generator, HushedGenerator
-from hush.hush_controller import SafetyHarnessProfile, SimplexConstraint, ConstraintType
-from hat.monitoring.lens_manager import DynamicLensManager
+from src.hush.hush_integration import create_hushed_generator, HushedGenerator
+from src.hush.hush_controller import SafetyHarnessProfile, SimplexConstraint, ConstraintType
+from src.hat.monitoring.lens_manager import DynamicLensManager
 
 
 @dataclass

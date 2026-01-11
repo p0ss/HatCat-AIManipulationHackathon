@@ -26,10 +26,12 @@ import asyncio
 
 import torch
 
+from app.utils.paths import load_project_config, resolve_hatcat_root
+
 # Ensure HatCat is in path before imports
-_project_root = Path(__file__).resolve().parent.parent.parent
-_hatcat = _project_root.parent / "HatCat"
-if _hatcat.exists() and str(_hatcat) not in sys.path:
+_config = load_project_config()
+_hatcat = resolve_hatcat_root(_config)
+if _hatcat and _hatcat.exists() and str(_hatcat) not in sys.path:
     sys.path.insert(0, str(_hatcat))
 
 # HatCat imports (path should be set by server)
@@ -186,8 +188,11 @@ class ABCEvaluationRunner:
             # Get concept pack path for auto contrastive selection
             concept_pack_path = self.config.get("concept_pack_path")
             if concept_pack_path:
-                from pathlib import Path
                 concept_pack_path = Path(concept_pack_path)
+            elif _hatcat and _hatcat.exists():
+                concept_pack_path = _hatcat / "concept_packs" / "first-light"
+            else:
+                concept_pack_path = None
 
             generator_c, _ = create_hushed_generator(
                 model=self.model,
@@ -231,13 +236,14 @@ class ABCEvaluationRunner:
         try:
             # Get lens pack path
             lens_path = self.config.get("lens_pack", {}).get("local_path")
+            if not lens_path and _hatcat and _hatcat.exists():
+                candidate = _hatcat / "src" / "lens_packs" / "gemma-3-4b-first-light-v1"
+                if candidate.exists():
+                    lens_path = candidate
+
             if not lens_path:
-                # Try to find it from HatCat
-                hatcat_path = Path(__file__).resolve().parent.parent.parent.parent / "HatCat"
-                lens_path = hatcat_path / "src" / "lens_packs" / "gemma-3-4b-first-light-v1"
-                if not lens_path.exists():
-                    print(f"Warning: Could not find lens pack at {lens_path}")
-                    return
+                print("Warning: Could not find lens pack. Configure lens_pack.local_path or hatcat_path.")
+                return
 
             lens_path = Path(lens_path)
             print(f"Loading steering vectors from: {lens_path}")

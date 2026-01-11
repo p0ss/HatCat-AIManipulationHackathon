@@ -12,6 +12,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app.utils.paths import resolve_hatcat_root
+
 router = APIRouter()
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
@@ -157,12 +159,14 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
 
         # Get concept pack path from config
         concept_pack_path_str = state.config.get("concept_pack_path", "")
-        if not concept_pack_path_str:
-            # Fallback to HatCat default
-            hatcat_root = Path(__file__).parent.parent.parent.parent.parent / "HatCat"
-            concept_pack_path = hatcat_root / "concept_packs" / "first-light"
-        else:
+        if concept_pack_path_str:
             concept_pack_path = Path(concept_pack_path_str)
+        else:
+            hatcat_root = resolve_hatcat_root(state.config)
+            if hatcat_root and hatcat_root.exists():
+                concept_pack_path = hatcat_root / "concept_packs" / "first-light"
+            else:
+                concept_pack_path = None
 
         # Create runner - REUSE lens_manager from state (fast!)
         runner = HatCatEvaluationRunner(

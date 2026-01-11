@@ -34,6 +34,14 @@ cd AIManipulationHackathon
 
 The dashboard opens automatically at **http://localhost:8080**
 
+### HatCat dependency location
+
+The server expects access to the HatCat FTW repository. By default it looks for a sibling checkout at `../HatCat`, but you can override this by setting the `HATCAT_ROOT` environment variable (or adding `hatcat_path` to `config.yaml`). `run.sh` respects the same variable for cloning/linking.
+
+### Remote / shared hosting
+
+`run.sh` reads `server.host` / `server.port` from `config.yaml` and can also be overridden via the `SERVER_HOST` / `SERVER_PORT` environment variables. Bind to `0.0.0.0` (the default) when the lab/sandbox exposes ports, or set a custom port that matches your tunnel/forwarding setup, e.g. `SERVER_PORT=7860 ./run.sh`. Make sure your platform forwards that port to your machine (SSH tunnel, VS Code port forwarding, LambdaSpaces “Expose Port”, etc.) before sharing the URL.
+
 ### Requirements
 
 - Python 3.10+
