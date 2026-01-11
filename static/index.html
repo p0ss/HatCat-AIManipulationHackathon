@@ -1,293 +1,670 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Manipulation Detection & Mitigation</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.24/dist/full.min.css" rel="stylesheet" type="text/css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
-    <style>
-        .tab-btn { @apply px-6 py-3 text-gray-400 hover:text-white border-b-2 border-transparent transition-colors; }
-        .tab-btn.active { @apply text-white border-blue-500; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .status-indicator { @apply w-3 h-3 rounded-full inline-block mr-2; }
-        .status-ok { @apply bg-green-500; }
-        .status-pending { @apply bg-yellow-500; }
-        .status-error { @apply bg-red-500; }
-        .card { @apply bg-gray-800 rounded-lg p-6 shadow-lg; }
-        .btn-primary { @apply bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors; }
-        .btn-secondary { @apply bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 px-4 rounded-lg transition-colors; }
-        .progress-bar { @apply h-2 bg-gray-700 rounded-full overflow-hidden; }
-        .progress-fill { @apply h-full bg-blue-500 transition-all duration-300; }
-    </style>
+    <link rel="stylesheet" href="/static/css/styles.css">
 </head>
-<body class="bg-gray-900 text-gray-100 min-h-screen">
-    <!-- Header -->
-    <header class="bg-gray-800 border-b border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 py-4">
-            <h1 class="text-2xl font-bold text-white">AI Manipulation Detection & Mitigation</h1>
-            <p class="text-sm text-gray-400 mt-1">Hackathon Demo - HatCat FTW + EU AI Act Compliance</p>
-        </div>
-    </header>
+<body class="bg-base-300 min-h-screen">
 
-    <!-- Tabs -->
-    <nav class="bg-gray-800 border-b border-gray-700">
-        <div class="max-w-7xl mx-auto px-4 flex">
-            <button class="tab-btn active" data-tab="setup">Setup</button>
-            <button class="tab-btn" data-tab="evaluation">Evaluation</button>
-            <button class="tab-btn" data-tab="results">Results</button>
-            <button class="tab-btn" data-tab="compliance">Compliance</button>
+    <!-- Navbar -->
+    <div class="navbar bg-base-100 border-b border-base-200 sticky top-0 z-50">
+        <div class="navbar-start">
+            <div class="flex items-center gap-3 px-4">
+                <div class="avatar placeholder">
+                    <div class="bg-primary text-primary-content rounded-full w-10">
+                        <span class="text-lg">🎩</span>
+                    </div>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold">HatCat FTW</h1>
+                    <p class="text-xs text-base-content/60">AI Safety Monitoring</p>
+                </div>
+            </div>
         </div>
-    </nav>
+        <div class="navbar-center">
+            <ul class="steps steps-horizontal">
+                <li class="step step-primary cursor-pointer" data-page="setup" onclick="navigateTo('setup')">
+                    <span class="hidden sm:inline">Setup</span>
+                </li>
+                <li class="step cursor-pointer" data-page="episodes" onclick="navigateTo('episodes')">
+                    <span class="hidden sm:inline">Episodes</span>
+                </li>
+                <li class="step cursor-pointer" data-page="run" onclick="navigateTo('run')">
+                    <span class="hidden sm:inline">Run</span>
+                </li>
+                <li class="step cursor-pointer" data-page="results" onclick="navigateTo('results')">
+                    <span class="hidden sm:inline">Results</span>
+                </li>
+            </ul>
+        </div>
+        <div class="navbar-end">
+            <div class="text-right px-4 text-sm">
+                <div id="navbar-gpu-info" class="text-base-content/60">Checking GPU...</div>
+                <div id="navbar-model-info" class="text-base-content/60">Model: Not loaded</div>
+            </div>
+        </div>
+    </div>
 
     <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 py-8">
-        <!-- Setup Tab -->
-        <div id="tab-setup" class="tab-content active">
+    <main class="container mx-auto p-6 max-w-7xl">
+
+        <!-- Page 1: Setup -->
+        <section id="page-setup" class="page active space-y-6">
+            <div class="prose max-w-none">
+                <h2>System Setup</h2>
+                <p class="text-base-content/70">Download the language model and HAT lens pack to begin evaluation.</p>
+            </div>
+
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Status Card -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">System Status</h2>
-                    <div class="space-y-3">
-                        <div class="flex items-center justify-between">
-                            <span><span class="status-indicator status-pending" id="status-hatcat"></span>HatCat Installed</span>
-                            <span class="text-sm text-gray-400" id="status-hatcat-text">Checking...</span>
+                <!-- Model Card -->
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <div class="flex justify-between items-start">
+                            <h3 class="card-title">Language Model</h3>
+                            <div id="model-status-badge" class="badge badge-warning gap-2">Not Loaded</div>
                         </div>
-                        <div id="hatcat-install-row" class="hidden ml-5 mt-1">
-                            <button class="btn-secondary text-xs py-1 px-3" id="btn-install-hatcat" onclick="installHatCat()">
-                                Install HatCat
+                        <p class="text-base-content/70">Gemma 3 4B - Base model for generation</p>
+
+                        <progress id="model-progress" class="progress progress-primary w-full" value="0" max="100"></progress>
+                        <p id="model-progress-text" class="text-sm text-base-content/60">Ready to download</p>
+
+                        <div class="card-actions justify-end mt-4">
+                            <button id="btn-download-model" class="btn btn-primary" onclick="downloadModel()">
+                                Download Model
                             </button>
-                            <span class="text-xs text-gray-500 ml-2" id="hatcat-path-text"></span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span><span class="status-indicator status-pending" id="status-model"></span>Model Loaded</span>
-                            <span class="text-sm text-gray-400" id="status-model-text">Not loaded</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span><span class="status-indicator status-pending" id="status-lens"></span>Lens Pack Ready</span>
-                            <span class="text-sm text-gray-400" id="status-lens-text">Not loaded</span>
-                        </div>
-                        <div class="flex items-center justify-between">
-                            <span><span class="status-indicator status-pending" id="status-gpu"></span>GPU Available</span>
-                            <span class="text-sm text-gray-400" id="status-gpu-text">Checking...</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- GPU Info Card -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">Hardware</h2>
-                    <div id="gpu-info" class="text-gray-400">
-                        Loading hardware information...
-                    </div>
-                </div>
+                <!-- Lens Pack Card -->
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <div class="flex justify-between items-start">
+                            <h3 class="card-title">HAT Lens Pack</h3>
+                            <div id="lens-status-badge" class="badge badge-warning gap-2">Not Loaded</div>
+                        </div>
+                        <p class="text-base-content/70">Concept lenses for safety monitoring</p>
 
-                <!-- Download Model Card -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">1. Download Model</h2>
-                    <p class="text-gray-400 mb-4">Download the Gemma 3 4B model from HuggingFace.</p>
-                    <div class="progress-bar mb-2" id="model-progress-bar">
-                        <div class="progress-fill" id="model-progress-fill" style="width: 0%"></div>
-                    </div>
-                    <p class="text-sm text-gray-500 mb-4" id="model-progress-text">Ready to download</p>
-                    <button class="btn-primary w-full flex items-center justify-center gap-2" id="btn-download-model" onclick="downloadModel()">
-                        <svg id="model-spinner" class="animate-spin h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span id="model-btn-text">Download Model</span>
-                    </button>
-                </div>
+                        <progress id="lens-progress" class="progress progress-primary w-full" value="0" max="100"></progress>
+                        <p id="lens-progress-text" class="text-sm text-base-content/60">Ready to download</p>
 
-                <!-- Download Lens Pack Card -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">2. Download Lens Pack</h2>
-                    <p class="text-gray-400 mb-4">Download the manipulation detection lens pack.</p>
-                    <div class="progress-bar mb-2" id="lens-progress-bar">
-                        <div class="progress-fill" id="lens-progress-fill" style="width: 0%"></div>
+                        <div class="card-actions justify-end mt-4">
+                            <button id="btn-download-lens" class="btn btn-primary" onclick="downloadLens()">
+                                Download Lens Pack
+                            </button>
+                        </div>
                     </div>
-                    <p class="text-sm text-gray-500 mb-4" id="lens-progress-text">Ready to download</p>
-                    <button class="btn-primary w-full flex items-center justify-center gap-2" id="btn-download-lens" onclick="downloadLens()">
-                        <svg id="lens-spinner" class="animate-spin h-5 w-5 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        <span id="lens-btn-text">Download Lens Pack</span>
-                    </button>
                 </div>
             </div>
 
-            <!-- Setup Complete Banner (hidden until ready) -->
-            <div id="setup-complete-banner" class="card mt-6 bg-green-900/30 border border-green-500 hidden">
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                        </svg>
-                        <div>
-                            <h3 class="text-lg font-semibold text-green-400">Setup Complete!</h3>
-                            <p class="text-gray-400">Model and lens pack are ready. You can now run the A/B/C evaluation.</p>
-                        </div>
+            <!-- Console -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h3 class="card-title">Console Output</h3>
+                    <div id="setup-console" class="mockup-code bg-base-300 max-h-48 overflow-y-auto">
+                        <pre data-prefix=">"><code class="text-base-content/50">Waiting for downloads...</code></pre>
                     </div>
-                    <button class="btn-primary" onclick="goToEvaluation()">
-                        Go to Evaluation →
-                    </button>
                 </div>
             </div>
 
-            <!-- Download Console -->
-            <div class="card mt-6">
-                <h2 class="text-xl font-semibold mb-4">Download Console</h2>
-                <div id="download-console" class="bg-gray-900 rounded p-4 h-48 overflow-y-auto font-mono text-sm">
-                    <p class="text-gray-500">Waiting for downloads...</p>
+            <!-- Setup Complete Banner -->
+            <div id="setup-complete-banner" class="alert alert-success hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                    <h3 class="font-bold">Setup Complete!</h3>
+                    <div class="text-sm">Ready to configure and run evaluations</div>
+                </div>
+                <button class="btn btn-sm btn-primary" onclick="navigateTo('episodes')">
+                    Configure Episodes
+                </button>
+            </div>
+        </section>
+
+        <!-- Page 2: Episodes -->
+        <section id="page-episodes" class="page space-y-6">
+            <div class="flex flex-wrap justify-between items-start gap-4">
+                <div class="prose max-w-none">
+                    <h2>Episode Configuration</h2>
+                    <p class="text-base-content/70">Select episodes and configure evaluation parameters.</p>
+                </div>
+                <div class="flex flex-wrap items-start gap-4">
+                    <div class="form-control w-60">
+                        <label class="label">
+                            <span class="label-text font-semibold">Episode Suite</span>
+                        </label>
+                        <select id="suite-selector" class="select select-bordered select-sm"
+                                onchange="handleSuiteChange(this)">
+                            <option>Loading suites...</option>
+                        </select>
+                        <label class="label">
+                            <span id="suite-summary" class="label-text-alt text-base-content/70">
+                                Detecting suites...
+                            </span>
+                        </label>
+                    </div>
+                    <div class="flex gap-2">
+                        <button class="btn btn-sm btn-outline" onclick="selectAllEpisodes(true)">Select All</button>
+                        <button class="btn btn-sm btn-outline" onclick="selectAllEpisodes(false)">Deselect All</button>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Evaluation Tab -->
-        <div id="tab-evaluation" class="tab-content">
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Episode Selection -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">Episodes</h2>
-                    <div id="episode-list" class="space-y-2">
-                        Loading episodes...
-                    </div>
-                    <button class="btn-secondary mt-4 text-sm" onclick="selectAllEpisodes()">Select All</button>
-                </div>
-
-                <!-- Condition Selection -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">Conditions</h2>
-                    <div class="space-y-3">
-                        <label class="flex items-start gap-3 cursor-pointer">
-                            <input type="checkbox" id="cond-A" checked class="mt-1">
-                            <div>
-                                <div class="font-medium text-red-400">A: Baseline</div>
-                                <div class="text-sm text-gray-400">No monitoring or intervention</div>
+                <!-- Episode List -->
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <h3 class="card-title">Episodes</h3>
+                        <div id="episode-list" class="space-y-2 max-h-96 overflow-y-auto">
+                            <div class="flex items-center gap-2 p-2 text-base-content/50">
+                                <span class="loading loading-spinner loading-sm"></span>
+                                Loading episodes...
                             </div>
-                        </label>
-                        <label class="flex items-start gap-3 cursor-pointer">
-                            <input type="checkbox" id="cond-B" checked class="mt-1">
-                            <div>
-                                <div class="font-medium text-yellow-400">B: Monitor-only</div>
-                                <div class="text-sm text-gray-400">HAT + ASK logging, no steering</div>
-                            </div>
-                        </label>
-                        <label class="flex items-start gap-3 cursor-pointer">
-                            <input type="checkbox" id="cond-C" checked class="mt-1">
-                            <div>
-                                <div class="font-medium text-green-400">C: Full Harness</div>
-                                <div class="text-sm text-gray-400">HAT + ASK + HUSH steering</div>
-                            </div>
-                        </label>
-                    </div>
-                </div>
-
-                <!-- Run Control -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">Run Evaluation</h2>
-                    <button class="btn-primary w-full text-lg py-3" id="btn-run" onclick="runEvaluation()">
-                        Start Evaluation
-                    </button>
-                    <button class="btn-secondary w-full mt-3 hidden" id="btn-abort" onclick="abortEvaluation()">
-                        Abort
-                    </button>
-                    <div class="mt-4">
-                        <div class="progress-bar" id="eval-progress-bar">
-                            <div class="progress-fill" id="eval-progress-fill" style="width: 0%"></div>
                         </div>
-                        <p class="text-sm text-gray-400 mt-2" id="eval-progress-text">Ready to run</p>
+                    </div>
+                </div>
+
+                <!-- Episode Detail -->
+                <div class="lg:col-span-2 space-y-6">
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <div class="flex justify-between items-center">
+                                <h3 class="card-title">Episode Details</h3>
+                                <div id="episode-behavior-badge" class="badge badge-info hidden"></div>
+                            </div>
+                            <div id="episode-detail-content" class="text-base-content/60">
+                                Select an episode to view details
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h3 class="card-title">Conversation Preview</h3>
+                            <div id="episode-turns" class="space-y-3 max-h-64 overflow-y-auto">
+                                <p class="text-base-content/60">Select an episode to view turns</p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Live Progress -->
-            <div class="card mt-6">
-                <h2 class="text-xl font-semibold mb-4">Live Progress</h2>
-                <div id="live-progress" class="bg-gray-900 rounded p-4 h-64 overflow-y-auto font-mono text-sm">
-                    <p class="text-gray-500">Waiting to start...</p>
-                </div>
-            </div>
-        </div>
+            <!-- Run Configuration -->
+            <div class="card bg-base-100 shadow-xl border-2 border-primary/30">
+                <div class="card-body">
+                    <h3 class="card-title">Run Configuration</h3>
 
-        <!-- Results Tab -->
-        <div id="tab-results" class="tab-content">
-            <div class="card mb-6">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl font-semibold">A/B/C Comparison</h2>
-                    <select id="run-selector" class="bg-gray-700 border border-gray-600 rounded px-3 py-1" onchange="loadResults()">
-                        <option value="">Select run...</option>
-                    </select>
-                </div>
-                <div id="comparison-chart" class="h-96"></div>
-            </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-4">
+                        <!-- Sample Count -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text">Samples per Episode</span>
+                                <span class="label-text-alt">Statistical runs</span>
+                            </label>
+                            <input type="number" id="sample-count" value="1" min="1" max="10"
+                                   class="input input-bordered w-full" />
+                            <label class="label">
+                                <span class="label-text-alt">More samples = better statistics</span>
+                            </label>
+                        </div>
 
-            <div class="card">
-                <h2 class="text-xl font-semibold mb-4">Intervention Activity (Condition C)</h2>
-                <div id="intervention-chart" class="h-80"></div>
-            </div>
+                        <!-- Selected Episodes Count -->
+                        <div class="form-control">
+                            <label class="label">
+                                <span class="label-text">Selected Episodes</span>
+                            </label>
+                            <div class="stat bg-base-200 rounded-lg p-4">
+                                <div class="stat-value text-2xl" id="selected-episode-count">0</div>
+                                <div class="stat-desc">episodes selected</div>
+                            </div>
+                        </div>
 
-            <!-- Summary Stats -->
-            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-                <div class="card text-center">
-                    <div class="text-3xl font-bold text-red-400" id="stat-baseline">-</div>
-                    <div class="text-sm text-gray-400">Baseline Rate</div>
-                </div>
-                <div class="card text-center">
-                    <div class="text-3xl font-bold text-yellow-400" id="stat-monitor">-</div>
-                    <div class="text-sm text-gray-400">Monitor Rate</div>
-                </div>
-                <div class="card text-center">
-                    <div class="text-3xl font-bold text-green-400" id="stat-harness">-</div>
-                    <div class="text-sm text-gray-400">Harness Rate</div>
-                </div>
-                <div class="card text-center">
-                    <div class="text-3xl font-bold text-blue-400" id="stat-reduction">-</div>
-                    <div class="text-sm text-gray-400">Reduction</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Compliance Tab -->
-        <div id="tab-compliance" class="tab-content">
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- EU AI Act Mapping -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">EU AI Act Compliance</h2>
-                    <div id="eu-mapping" class="space-y-4">
-                        Loading...
+                        <!-- Evaluation Conditions - 2x3 Matrix -->
+                        <div class="form-control lg:col-span-2">
+                            <label class="label">
+                                <span class="label-text font-semibold">Evaluation Conditions (2×3 Matrix)</span>
+                            </label>
+                            <div class="overflow-x-auto">
+                                <table class="table table-xs">
+                                    <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th class="text-center">No Monitoring</th>
+                                            <th class="text-center">HAT Monitor</th>
+                                            <th class="text-center">HUSH Steering</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <th class="text-right">Natural</th>
+                                            <td class="text-center">
+                                                <label class="label cursor-pointer justify-center gap-2">
+                                                    <input type="checkbox" id="run-cond-A" checked class="checkbox checkbox-neutral checkbox-xs" />
+                                                    <span class="badge badge-neutral badge-sm">A</span>
+                                                </label>
+                                            </td>
+                                            <td class="text-center">
+                                                <label class="label cursor-pointer justify-center gap-2">
+                                                    <input type="checkbox" id="run-cond-B" checked class="checkbox checkbox-info checkbox-xs" />
+                                                    <span class="badge badge-info badge-sm">B</span>
+                                                </label>
+                                            </td>
+                                            <td class="text-center">
+                                                <label class="label cursor-pointer justify-center gap-2">
+                                                    <input type="checkbox" id="run-cond-C" checked class="checkbox checkbox-success checkbox-xs" />
+                                                    <span class="badge badge-success badge-sm">C</span>
+                                                </label>
+                                            </td>
+                                        </tr>
+                                        <tr class="bg-error/10">
+                                            <th class="text-right text-error">Induced</th>
+                                            <td class="text-center">
+                                                <label class="label cursor-pointer justify-center gap-2">
+                                                    <input type="checkbox" id="run-cond-D" class="checkbox checkbox-warning checkbox-xs" />
+                                                    <span class="badge badge-warning badge-sm">D</span>
+                                                </label>
+                                            </td>
+                                            <td class="text-center">
+                                                <label class="label cursor-pointer justify-center gap-2">
+                                                    <input type="checkbox" id="run-cond-E" class="checkbox checkbox-warning checkbox-xs" />
+                                                    <span class="badge badge-warning badge-sm">E</span>
+                                                </label>
+                                            </td>
+                                            <td class="text-center">
+                                                <label class="label cursor-pointer justify-center gap-2">
+                                                    <input type="checkbox" id="run-cond-F" class="checkbox checkbox-error checkbox-xs" />
+                                                    <span class="badge badge-error badge-sm">F</span>
+                                                </label>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="text-xs text-base-content/60 mt-2 space-y-1">
+                                <p><strong>Natural row:</strong> Model's natural behavior</p>
+                                <p><strong>Induced row:</strong> Deception induced via steering - can we detect (E) or counteract (F)?</p>
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                <!-- Export -->
-                <div class="card">
-                    <h2 class="text-xl font-semibold mb-4">Export Reports</h2>
-                    <p class="text-gray-400 mb-4">Generate compliance reports and audit logs.</p>
-                    <div class="space-y-3">
-                        <button class="btn-primary w-full" onclick="exportReport('eu_ai_act')">
-                            Export EU AI Act Report (HTML)
+                    <div class="divider"></div>
+
+                    <div class="flex justify-between items-center">
+                        <div class="text-sm text-base-content/70">
+                            Total runs: <span id="total-runs-count" class="font-bold">0</span>
+                        </div>
+                        <button class="btn btn-primary btn-lg gap-2" onclick="startEvaluation()">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                            </svg>
+                            Start Evaluation
                         </button>
-                        <button class="btn-secondary w-full" onclick="exportReport('json')">
-                            Export Audit Log (JSON)
-                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Page 3: Run -->
+        <section id="page-run" class="page space-y-6">
+            <div class="flex flex-wrap justify-between items-start gap-4">
+                <div class="prose max-w-none">
+                    <h2>Live Evaluation</h2>
+                    <p id="run-status-text" class="text-base-content/70">Waiting to start...</p>
+                </div>
+                <button id="btn-abort" class="btn btn-error btn-outline hidden" onclick="abortEvaluation()">
+                    Abort Run
+                </button>
+            </div>
+
+            <!-- Progress -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <div class="flex justify-between items-center mb-2">
+                        <span id="run-progress-label" class="font-medium">Progress</span>
+                        <span id="run-progress-percent" class="badge badge-primary">0%</span>
+                    </div>
+                    <progress id="run-progress" class="progress progress-primary w-full" value="0" max="100"></progress>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Left Panel: Current Episode Info -->
+                <div class="space-y-6">
+                    <!-- Current Episode -->
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h3 class="card-title text-sm">Current Episode</h3>
+                            <div id="current-episode-info" class="text-base-content/60">
+                                Waiting...
+                            </div>
+                            <div class="divider my-2"></div>
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm text-base-content/60">Condition:</span>
+                                <span id="current-condition-label" class="badge">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Conversation Context -->
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h3 class="card-title text-sm text-info">Conversation</h3>
+                            <div id="episode-turns-display" class="space-y-2 max-h-48 overflow-y-auto text-sm">
+                                <p class="text-base-content/50">Turns appear when episode starts...</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Steerings -->
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h3 class="card-title text-sm text-warning">Active Steerings</h3>
+                            <div id="active-steerings-list" class="space-y-2 text-sm">
+                                <p class="text-base-content/50">No active steerings</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Safety Alerts -->
+                    <div class="card bg-base-100 shadow-xl">
+                        <div class="card-body">
+                            <h3 class="card-title text-sm text-error">Safety Alerts</h3>
+                            <div id="safety-alerts-list" class="space-y-2 text-sm">
+                                <p class="text-base-content/50">No alerts</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Live Token Stream -->
+                <div class="lg:col-span-2">
+                    <div class="card bg-base-100 shadow-xl h-full">
+                        <div class="card-body flex flex-col">
+                            <div class="flex flex-wrap justify-between items-center gap-2">
+                                <h3 class="card-title">Live Generation</h3>
+                                <div class="flex gap-2 items-center flex-wrap">
+                                    <!-- History Navigation -->
+                                    <div id="history-nav" class="join hidden">
+                                        <button class="btn btn-xs join-item history-prev" onclick="navigateHistory(-1)" title="Previous episode">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                                            </svg>
+                                        </button>
+                                        <span class="btn btn-xs join-item btn-ghost history-counter pointer-events-none">Live</span>
+                                        <button class="btn btn-xs join-item history-next" onclick="navigateHistory(1)" title="Next episode">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                            </svg>
+                                        </button>
+                                        <button class="btn btn-xs join-item history-live" onclick="goToLive()" title="Go to live">
+                                            LIVE
+                                        </button>
+                                    </div>
+                                    <div id="token-count" class="badge badge-outline">0 tokens</div>
+                                    <div class="flex gap-1 text-xs">
+                                        <span class="badge badge-ghost badge-sm">Default</span>
+                                        <span class="badge badge-error badge-outline badge-sm">Violation</span>
+                                        <span class="badge badge-warning badge-outline badge-sm">Steered</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="live-tokens" class="token-stream flex-1 min-h-64 max-h-96 overflow-y-auto p-4 bg-base-300 rounded-lg mt-4">
+                                <p class="text-base-content/50">Tokens appear here during generation...</p>
+                            </div>
+
+                            <div id="concept-legend" class="mt-4 text-xs text-base-content/60">
+                                Hover over tokens to see concept activations
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Audit Log Viewer -->
-            <div class="card mt-6">
-                <h2 class="text-xl font-semibold mb-4">Audit Log Viewer</h2>
-                <select id="audit-log-selector" class="bg-gray-700 border border-gray-600 rounded px-3 py-2 mb-4" onchange="loadAuditLog()">
-                    <option value="">Select audit log...</option>
+            <!-- Run Log -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h3 class="card-title">Run Log</h3>
+                    <div id="run-log" class="mockup-code bg-base-300 max-h-48 overflow-y-auto">
+                        <pre data-prefix=">"><code class="text-base-content/50">Waiting to start...</code></pre>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Page 4: Results -->
+        <section id="page-results" class="page space-y-6">
+            <div class="flex flex-wrap justify-between items-start gap-4">
+                <div class="prose max-w-none">
+                    <h2>Results & Reports</h2>
+                    <p class="text-base-content/70">Browse evaluation runs and detailed logs.</p>
+                </div>
+                <select id="run-selector" class="select select-bordered" onchange="loadRunResults()">
+                    <option value="">Select run...</option>
                 </select>
-                <pre id="audit-log-content" class="bg-gray-900 rounded p-4 overflow-auto max-h-96 text-sm">
-Select an audit log to view its contents.
-                </pre>
+            </div>
+
+            <!-- Summary Stats - 2x3 Matrix -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <!-- Natural Conditions -->
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body p-4">
+                        <h4 class="card-title text-sm">Natural Behavior</h4>
+                        <div class="stats stats-vertical sm:stats-horizontal shadow-none">
+                            <div class="stat px-3">
+                                <div class="stat-title text-xs">A: Baseline</div>
+                                <div class="stat-value text-lg text-base-content" id="stat-baseline">-</div>
+                            </div>
+                            <div class="stat px-3">
+                                <div class="stat-title text-xs">B: Monitor</div>
+                                <div class="stat-value text-lg text-info" id="stat-monitor">-</div>
+                            </div>
+                            <div class="stat px-3">
+                                <div class="stat-title text-xs">C: Steering</div>
+                                <div class="stat-value text-lg text-success" id="stat-harness">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Induced Conditions -->
+                <div class="card bg-error/10 shadow-xl border border-error/30">
+                    <div class="card-body p-4">
+                        <h4 class="card-title text-sm text-error">Induced Deception</h4>
+                        <div class="stats stats-vertical sm:stats-horizontal shadow-none bg-transparent">
+                            <div class="stat px-3">
+                                <div class="stat-title text-xs">D: Induced</div>
+                                <div class="stat-value text-lg text-error" id="stat-induced">-</div>
+                            </div>
+                            <div class="stat px-3">
+                                <div class="stat-title text-xs">E: Ind+Mon</div>
+                                <div class="stat-value text-lg text-warning" id="stat-induced-mon">-</div>
+                            </div>
+                            <div class="stat px-3">
+                                <div class="stat-title text-xs">F: Ind+Steer</div>
+                                <div class="stat-value text-lg text-secondary" id="stat-induced-steer">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Key Insight -->
+            <div class="alert">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-info shrink-0 w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <div>
+                    <span class="font-bold">Key Question:</span> Can HUSH steering (F) counteract induced deception (D)?
+                    <span class="font-mono ml-2">Delta: <span id="stat-reduction" class="text-primary font-bold">-</span></span>
+                </div>
+            </div>
+
+            <!-- Detailed Statistics -->
+            <div class="collapse collapse-arrow bg-base-200">
+                <input type="checkbox" />
+                <div class="collapse-title text-sm font-medium">
+                    Detailed Statistics (Pass/Fail/Null breakdown, Confidence)
+                </div>
+                <div class="collapse-content">
+                    <div id="stats-detail" class="p-2">
+                        <p class="text-sm text-base-content/60">Run an evaluation to see detailed statistics.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <h3 class="card-title">Manipulation Rate by Condition</h3>
+                        <div id="comparison-chart" class="h-80"></div>
+                    </div>
+                </div>
+                <div class="card bg-base-100 shadow-xl">
+                    <div class="card-body">
+                        <h3 class="card-title">HUSH Interventions</h3>
+                        <div id="intervention-chart" class="h-80"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Episode Drill-Down -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h3 class="card-title">Episode Details</h3>
+                    <select id="result-episode-selector" class="select select-bordered w-full max-w-md" onchange="loadEpisodeDetail()">
+                        <option value="">Select episode to inspect...</option>
+                    </select>
+
+                    <div id="episode-detail-view" class="hidden mt-6">
+                        <!-- Response Comparison - Natural Row -->
+                        <h4 class="font-semibold mb-2">Natural Behavior</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="card bg-base-200 border-l-4 border-base-content/30">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-center">
+                                        <h4 class="font-semibold">A: Baseline</h4>
+                                        <span id="detail-status-A" class="badge"></span>
+                                    </div>
+                                    <div id="detail-response-A" class="text-sm mt-2 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                            <div class="card bg-base-200 border-l-4 border-info">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-center">
+                                        <h4 class="font-semibold text-info">B: Monitor</h4>
+                                        <span id="detail-status-B" class="badge"></span>
+                                    </div>
+                                    <div id="detail-response-B" class="text-sm mt-2 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                            <div class="card bg-base-200 border-l-4 border-success">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-center">
+                                        <h4 class="font-semibold text-success">C: Steering</h4>
+                                        <span id="detail-status-C" class="badge"></span>
+                                    </div>
+                                    <div id="detail-response-C" class="text-sm mt-2 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Response Comparison - Induced Row -->
+                        <h4 class="font-semibold mb-2 text-error">Induced Deception</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                            <div class="card bg-error/10 border-l-4 border-error">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-center">
+                                        <h4 class="font-semibold text-error">D: Induced</h4>
+                                        <span id="detail-status-D" class="badge"></span>
+                                    </div>
+                                    <div id="detail-response-D" class="text-sm mt-2 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                            <div class="card bg-warning/10 border-l-4 border-warning">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-center">
+                                        <h4 class="font-semibold text-warning">E: Ind+Monitor</h4>
+                                        <span id="detail-status-E" class="badge"></span>
+                                    </div>
+                                    <div id="detail-response-E" class="text-sm mt-2 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                            <div class="card bg-secondary/10 border-l-4 border-secondary">
+                                <div class="card-body p-4">
+                                    <div class="flex justify-between items-center">
+                                        <h4 class="font-semibold text-secondary">F: Ind+Steering</h4>
+                                        <span id="detail-status-F" class="badge"></span>
+                                    </div>
+                                    <div id="detail-response-F" class="text-sm mt-2 whitespace-pre-wrap max-h-40 overflow-y-auto"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- XDB Log Viewer -->
+                        <div class="divider">Token-by-Token Analysis</div>
+                        <div class="flex justify-between items-center mb-4">
+                            <h4 class="font-semibold">Detailed Log</h4>
+                            <select id="xdb-condition-selector" class="select select-bordered select-sm" onchange="loadXDBLog()">
+                                <option value="A">A: Baseline</option>
+                                <option value="B">B: Monitor</option>
+                                <option value="C" selected>C: Steering</option>
+                                <option value="D">D: Induced</option>
+                                <option value="E">E: Ind+Monitor</option>
+                                <option value="F">F: Ind+Steering</option>
+                            </select>
+                        </div>
+                        <div id="xdb-log-viewer" class="mockup-code bg-base-300 max-h-96 overflow-y-auto">
+                            <pre data-prefix=">"><code class="text-base-content/50">Select an episode to view detailed logs</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Export Options -->
+            <div class="card bg-base-100 shadow-xl">
+                <div class="card-body">
+                    <h3 class="card-title">Export & Compliance</h3>
+                    <div class="flex gap-4 flex-wrap">
+                        <button class="btn btn-outline" onclick="exportReport('json')">
+                            Export JSON
+                        </button>
+                        <button class="btn btn-outline" onclick="exportReport('eu_ai_act')">
+                            EU AI Act Report
+                        </button>
+                        <button class="btn btn-outline" onclick="showComplianceModal()">
+                            View Compliance Mapping
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Token Tooltip -->
+    <div id="hatcat-tooltip" class="card bg-base-100 shadow-xl fixed z-50 p-4 max-w-sm text-sm hidden pointer-events-none"></div>
+
+    <!-- Compliance Modal -->
+    <dialog id="compliance-modal" class="modal">
+        <div class="modal-box max-w-3xl">
+            <form method="dialog">
+                <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+            </form>
+            <h3 class="font-bold text-lg mb-4">EU AI Act Compliance Mapping</h3>
+            <div id="compliance-mapping-content" class="max-h-96 overflow-y-auto">
+                Loading...
             </div>
         </div>
-    </main>
+        <form method="dialog" class="modal-backdrop">
+            <button>close</button>
+        </form>
+    </dialog>
 
     <script src="/static/js/app.js"></script>
 </body>

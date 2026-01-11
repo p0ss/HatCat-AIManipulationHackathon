@@ -34,6 +34,20 @@ cd AIManipulationHackathon
 
 The dashboard opens automatically at **http://localhost:8080**
 
+### HatCat dependency location
+
+The server expects access to the HatCat FTW repository. By default it looks for a sibling checkout at `../HatCat`, but you can override this by setting the `HATCAT_ROOT` environment variable (or adding `hatcat_path` to `config.yaml`). `run.sh` respects the same variable for cloning/linking.
+
+### Remote / shared hosting
+
+`run.sh` reads `server.host` / `server.port` from `config.yaml` and can also be overridden via the `SERVER_HOST` / `SERVER_PORT` environment variables. Bind to `0.0.0.0` (the default) when the lab/sandbox exposes ports, or set a custom port that matches your tunnel/forwarding setup, e.g. `SERVER_PORT=7860 ./run.sh`. Make sure your platform forwards that port to your machine (SSH tunnel, VS Code port forwarding, LambdaSpaces “Expose Port”, etc.) before sharing the URL.
+
+For the on-screen URL, set either `PUBLIC_DASHBOARD_URL` (full URL, e.g. `https://myspace.lambdafwd.com/run/8080`) or `PUBLIC_DASHBOARD_HOST`/`PUBLIC_DASHBOARD_PORT`/`PUBLIC_DASHBOARD_SCHEME`. This does not create port forwarding for you—it simply prints the URL you expect others to use so everyone copies the right link.
+
+### Keeping HatCat up to date
+
+`run.sh` automatically clones HatCat into `HATCAT_DIR` if it is missing. To fast-forward the checkout before launching the dashboard, run `HATCAT_UPDATE=1 ./run.sh`. You can also specify a different branch with `HATCAT_BRANCH=feature-x ./run.sh`. Combine these with `HATCAT_DIR` / `HATCAT_ROOT` env vars if your HatCat repo lives elsewhere.
+
 ### Requirements
 
 - Python 3.10+
@@ -56,6 +70,7 @@ Status indicators show when components are ready.
 Run manipulation detection experiments:
 
 1. Select episodes to evaluate (6 behaviors available)
+2. Choose the episode suite (e.g., toy suite v1 or deception suite v2)
 2. Choose conditions to compare (A, B, C)
 3. Click "Start Evaluation"
 4. Watch real-time progress as each episode runs
