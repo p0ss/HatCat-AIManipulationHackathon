@@ -1,10 +1,16 @@
-# AI Manipulation Detection & Mitigation
+# Governing AI Manipulation in Real Time with Concept-Based Mechanistic Interpretability
 
-A demonstration system for detecting and mitigating manipulative behaviors in AI language models, built on the [HatCat FTW](https://github.com/HatCatFTW/HatCat) interpretability framework.
+An AI manipulation audit tool for real-time detection, mitigation and governance of manipulative AI behaviours, with audit outputs designed to support EU AI Act oversight.
+
+Built on the [HatCat FTW](https://github.com/HatCatFTW/HatCat) interpretability framework for the [AI Manipulation Hackathon](https://apartresearch.com/sprints/ai-manipulation-hackathon-2026-01-09-to-2026-01-11) (Apart Research, January 2026).
 
 ## Overview
 
-This project evaluates AI manipulation behaviors under three experimental conditions:
+The tool covers six manipulation categories: **sycophancy**, **strategic deception**, **sandbagging**, **reward hacking**, **dark patterns**, and **persuasive manipulation**.
+
+It combines concept-based mechanistic monitoring (HatCat FTW), optional concept-level steering (HUSH), and tamper-evident logging and reporting (ASK), behind a simple dashboard.
+
+### Experimental Conditions
 
 | Condition | Description | Components Active |
 |-----------|-------------|-------------------|
@@ -212,9 +218,17 @@ hush:
 | `/api/compliance/eu-mapping` | GET | EU AI Act mapping |
 | `/api/compliance/export` | POST | Export compliance report |
 
+## Authors
+
+- **Possum Hodgkin** - Independent HatCat author
+- **Kaouthar El Bairi** - Moroccan Ministry of Justice; Sidi Mohamed Ben Abdellah University, Fes
+- **Jason Boudville** - Independent researcher
+
 ## Acknowledgments
 
 Built on the [HatCat FTW](https://github.com/HatCatFTW/HatCat) interpretability framework.
+
+Research conducted at the AI Manipulation Hackathon, January 2026, with Apart Research.
 
 ## License
 

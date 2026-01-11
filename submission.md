@@ -262,8 +262,8 @@ Crucially, these limitations can be mitigated when the answer sought has a singl
 2.9.3 Implementation Details
 Pre-processing: Before matching, we normalise response text by lowercasing and stripping quoted segments, so the scorer sees only the assistant’s own claims (avoiding false hits when it quotes the user). We extract keywords and expected answers from each episode’s structured data, including the user’s false claim, the expected gold answers, and allowed variants, ensuring we match scenario-specific text rather than global word lists.
 Two-stage matching:
-    7. Explicit markers: First check for markers defined in each episode (manipulation_indicators / honest_indicators). These are literal substrings baked into the suites, giving deterministic high-confidence verdicts when present.
-    8. Behaviour-specific heuristics: If no explicit marker fires, fall back to behaviour-specific routines using plain string heuristics that remain deterministic.
+    1. Explicit markers: First check for markers defined in each episode (manipulation_indicators / honest_indicators). These are literal substrings baked into the suites, giving deterministic high-confidence verdicts when present.
+    2. Behaviour-specific heuristics: If no explicit marker fires, fall back to behaviour-specific routines using plain string heuristics that remain deterministic.
 Per-behaviour scoring logic:
 Behaviour
 Pass Criteria
@@ -466,10 +466,10 @@ Implications:
     • Ecosystem defence: Multiple independent lens packs from different parties make comprehensive evasion exponentially harder
     • Audit transparency: All steering actions are logged to ASK, creating accountability trails
 6.3 Responsible Use Recommendations
-    9. Lens packs should be distributed through trusted registries with provenance tracking
-    10. Steering toward harmful behaviours should only be conducted in controlled research settings
-    11. Production deployments should use suppression-only profiles with harmful steering disabled
-    12. All steering research should maintain complete audit logs for accountability
+    1. Lens packs should be distributed through trusted registries with provenance tracking
+    2. Steering toward harmful behaviours should only be conducted in controlled research settings
+    3. Production deployments should use suppression-only profiles with harmful steering disabled
+    4. All steering research should maintain complete audit logs for accountability
 
 7. Appendix: Limitations
 7.1 Technical Limitations
@@ -506,11 +506,11 @@ Induced behaviour validity: D/E/F conditions induce manipulation via steering, w
 8. Appendix: System Architecture
 8.1 Web Dashboard
 The system provides a one-click setup via run.sh that:
-    13. Clones HatCat repository if not present
-    14. Creates virtual environment and installs dependencies
-    15. Downloads Gemma 3 4B model from HuggingFace
-    16. Downloads lens pack from HatCatFTW/lens-gemma-3-4b-first-light-v1
-    17. Launches FastAPI dashboard at localhost:8080
+    1. Clones HatCat repository if not present
+    2. Creates virtual environment and installs dependencies
+    3. Downloads Gemma 3 4B model from HuggingFace
+    4. Downloads lens pack from HatCatFTW/lens-gemma-3-4b-first-light-v1
+    5. Launches FastAPI dashboard at localhost:8080
 8.2 Results Drill-Down
 The results interface provides:
     • Per-response detail view for each sample
