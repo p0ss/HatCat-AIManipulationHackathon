@@ -36,6 +36,8 @@ class RunState:
         self.completed_episodes = 0
         self.current_episode = None
         self.current_condition = None
+        self.suite_id = None
+        self.suite_name = None
         self.conditions = []
         self.episode_ids = []
         # Store completed results for display

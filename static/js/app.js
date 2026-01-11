@@ -10,6 +10,10 @@
 const AppState = {
     modelLoaded: false,
     lensLoaded: false,
+    suites: [],
+    selectedSuiteId: null,
+    currentSuiteMeta: null,
+    pendingSuiteId: null,
     episodes: [],
     selectedEpisodes: new Set(),
     currentResults: null,
@@ -45,6 +49,10 @@ async function checkAndRestoreRunState() {
 
         // Restore AppState
         AppState.currentRunId = state.run_id;
+        if (state.suite_id) {
+            AppState.pendingSuiteId = state.suite_id;
+            AppState.selectedSuiteId = state.suite_id;
+        }
 
         if (state.status === 'running') {
             // Run is still in progress - navigate to run page and show progress
@@ -180,6 +188,7 @@ function addViewResultsButton() {
 
 // Check for existing run state on page load
 document.addEventListener('DOMContentLoaded', () => {
+    loadSuites();
     // Delay slightly to let other init complete
     setTimeout(checkAndRestoreRunState, 500);
 });
@@ -424,11 +433,136 @@ document.addEventListener('DOMContentLoaded', () => {
 // Episodes Page
 // ============================================================================
 
+let suitesLoadingPromise = null;
+
+async function loadSuites() {
+    if (suitesLoadingPromise) {
+        return suitesLoadingPromise;
+    }
+
+    suitesLoadingPromise = (async () => {
+        try {
+            const response = await fetch('/api/evaluation/suites');
+            const data = await response.json();
+        AppState.suites = data.suites || [];
+
+        if (!AppState.selectedSuiteId) {
+            AppState.selectedSuiteId = AppState.pendingSuiteId || data.default_suite_id || (AppState.suites[0]?.id ?? null);
+        }
+        AppState.pendingSuiteId = null;
+
+        renderSuiteSelector();
+        } catch (error) {
+            console.error('Failed to load suites:', error);
+            const selector = document.getElementById('suite-selector');
+            if (selector) {
+                selector.innerHTML = '<option value="">No suites found</option>';
+                selector.disabled = true;
+            }
+        } finally {
+            suitesLoadingPromise = null;
+        }
+    })();
+
+    return suitesLoadingPromise;
+}
+
+function renderSuiteSelector() {
+    const selector = document.getElementById('suite-selector');
+    if (!selector) return;
+
+    if (!AppState.suites.length) {
+        selector.innerHTML = '<option value="">No suites discovered</option>';
+        selector.disabled = true;
+        renderSuiteSummary(null);
+        return;
+    }
+
+    selector.disabled = false;
+    selector.innerHTML = AppState.suites.map(suite => `
+        <option value="${suite.id}">${suite.name}${suite.version ? ` (v${suite.version})` : ''}</option>
+    `).join('');
+
+    const hasSelected = AppState.suites.some(s => s.id === AppState.selectedSuiteId);
+    if (!hasSelected) {
+        AppState.selectedSuiteId = AppState.suites[0].id;
+    }
+    selector.value = AppState.selectedSuiteId;
+
+    const meta = AppState.suites.find(s => s.id === AppState.selectedSuiteId) || AppState.suites[0];
+    if (meta) {
+        AppState.currentSuiteMeta = {
+            id: meta.id,
+            name: meta.name,
+            version: meta.version,
+            behavior_count: meta.behavior_count,
+            episode_count: meta.episode_count,
+            notes: meta.notes,
+        };
+        renderSuiteSummary(AppState.currentSuiteMeta);
+    }
+}
+
+function renderSuiteSummary(meta) {
+    const summaryEl = document.getElementById('suite-summary');
+    if (!summaryEl) return;
+
+    if (!meta) {
+        summaryEl.textContent = 'No episode suites detected in /episodes';
+        summaryEl.title = '';
+        return;
+    }
+
+    const behaviorCount = meta.behavior_count ?? AppState.episodes.length;
+    const episodeCount = meta.episode_count ?? AppState.episodes.length;
+    const versionText = meta.version ? ` • v${meta.version}` : '';
+    summaryEl.textContent = `${behaviorCount || 0} behaviors • ${episodeCount || 0} episodes${versionText}`;
+    if (meta.notes) {
+        summaryEl.title = meta.notes;
+    }
+}
+
+async function handleSuiteChange(selectEl) {
+    const value = typeof selectEl === 'string' ? selectEl : selectEl?.value;
+    if (!value || value === AppState.selectedSuiteId) return;
+    AppState.selectedSuiteId = value;
+    AppState.pendingSuiteId = null;
+    AppState.selectedEpisodes.clear();
+    await loadEpisodes();
+}
+
 async function loadEpisodes() {
     try {
-        const response = await fetch('/api/evaluation/episodes');
+        if (!AppState.suites.length) {
+            await loadSuites();
+        }
+
+        if (!AppState.selectedSuiteId && AppState.suites.length) {
+            AppState.selectedSuiteId = AppState.suites[0].id;
+        }
+
+        if (!AppState.selectedSuiteId) {
+            document.getElementById('episode-list').innerHTML = '<p class="text-error">No episode suites available</p>';
+            return;
+        }
+
+        const response = await fetch(`/api/evaluation/episodes?suite_id=${encodeURIComponent(AppState.selectedSuiteId)}`);
         const data = await response.json();
+        if (data.error) {
+            document.getElementById('episode-list').innerHTML = `<p class="text-error">${data.error}</p>`;
+            renderSuiteSummary(null);
+            return;
+        }
         AppState.episodes = data.episodes || [];
+        if (data.suite) {
+            AppState.currentSuiteMeta = data.suite;
+            renderSuiteSummary(AppState.currentSuiteMeta);
+        }
+
+        const validIds = new Set(AppState.episodes.map(ep => ep.id));
+        Array.from(AppState.selectedEpisodes).forEach(id => {
+            if (!validIds.has(id)) AppState.selectedEpisodes.delete(id);
+        });
 
         const container = document.getElementById('episode-list');
         if (AppState.episodes.length === 0) {
@@ -449,12 +583,11 @@ async function loadEpisodes() {
             </label>
         `).join('');
 
-        updateSelectedCount();
-        updateTotalRuns();
-
-        // Auto-select all on first load
-        if (AppState.selectedEpisodes.size === 0) {
+        if (AppState.selectedEpisodes.size === 0 && AppState.episodes.length > 0) {
             selectAllEpisodes(true);
+        } else {
+            updateSelectedCount();
+            updateTotalRuns();
         }
 
     } catch (error) {
@@ -509,10 +642,7 @@ function updateSelectedCount() {
 async function showEpisodeDetail(episodeId) {
     // Fetch full episode data
     try {
-        const response = await fetch('/api/evaluation/episodes');
-        const data = await response.json();
-        const episode = data.episodes.find(ep => ep.id === episodeId);
-
+        const episode = AppState.episodes.find(ep => ep.id === episodeId);
         if (!episode) return;
 
         // Update detail view
@@ -554,7 +684,8 @@ async function showEpisodeDetail(episodeId) {
 
 async function loadEpisodeTurns(episodeId) {
     try {
-        const response = await fetch(`/api/evaluation/episode/${episodeId}`);
+        const suiteParam = AppState.selectedSuiteId ? `?suite_id=${encodeURIComponent(AppState.selectedSuiteId)}` : '';
+        const response = await fetch(`/api/evaluation/episode/${episodeId}${suiteParam}`);
         const episode = await response.json();
 
         const turnsContainer = document.getElementById('episode-turns');
@@ -612,6 +743,7 @@ function getSpeakerBorderColor(speaker) {
 
 async function startEvaluation() {
     const episodes = Array.from(AppState.selectedEpisodes);
+    const suiteId = AppState.selectedSuiteId;
     const conditions = [];
     // Natural conditions
     if (document.getElementById('run-cond-A')?.checked) conditions.push('A');
@@ -623,6 +755,11 @@ async function startEvaluation() {
     if (document.getElementById('run-cond-F')?.checked) conditions.push('F');
 
     const sampleCount = parseInt(document.getElementById('sample-count')?.value || 1);
+
+    if (!suiteId) {
+        alert('No episode suite selected. Please choose a suite.');
+        return;
+    }
 
     if (episodes.length === 0) {
         alert('Please select at least one episode');
@@ -649,7 +786,7 @@ async function startEvaluation() {
     progressEl.value = 0;
     percentEl.textContent = '0%';
     statusText.textContent = 'Starting evaluation...';
-    logEl.innerHTML = '<pre data-prefix=">"><code class="text-info">Starting...</code></pre>';
+    logEl.innerHTML = `<pre data-prefix=">"><code class="text-info">Starting suite ${suiteId}...</code></pre>`;
     tokensEl.innerHTML = '';
     abortBtn.classList.remove('hidden');
 
@@ -667,7 +804,8 @@ async function startEvaluation() {
             body: JSON.stringify({
                 episode_ids: episodes,
                 conditions,
-                sample_count: sampleCount
+                sample_count: sampleCount,
+                suite_id: suiteId
             })
         });
 
@@ -709,6 +847,10 @@ function handleRunEvent(data) {
         case 'start':
             statusText.textContent = `Running ${data.total_episodes} episodes, conditions: ${data.conditions.join(', ')}`;
             logToRunLog(`Starting evaluation: ${data.total_episodes} episodes`, 'info');
+            if (data.suite_id) {
+                const suiteLabel = data.suite_name || data.suite_id;
+                logToRunLog(`Suite: ${suiteLabel}`, 'info');
+            }
             break;
 
         case 'episode_turns':
@@ -1144,7 +1286,7 @@ async function loadRunsList() {
         const selector = document.getElementById('run-selector');
         selector.innerHTML = '<option value="">Select run...</option>' +
             data.results.map(r =>
-                `<option value="${r.run_id}">${r.run_id} (${r.episode_count} episodes)</option>`
+                `<option value="${r.run_id}">${r.run_id} (${r.episode_count} episodes${r.suite?.name ? ` • ${r.suite.name}` : ''})</option>`
             ).join('');
 
         // Auto-select latest or current run
@@ -1828,13 +1970,23 @@ function appendTokenDirect(container, token, metadata) {
     span.className = 'hatcat-token';
     span.textContent = token;
 
-    if (metadata.color) {
-        span.style.backgroundColor = metadata.color;
-        span.style.color = getContrastColor(metadata.color);
+    // Use server-provided display_color (from HatCat significance scoring)
+    // Falls back to client-side computation if not provided
+    let bgColor;
+    if (metadata.display_color) {
+        bgColor = metadata.display_color;
+    } else if (metadata.color) {
+        bgColor = metadata.color;
     } else {
-        span.style.backgroundColor = '#374151';
-        span.style.color = '#d1d5db';
+        // Fallback: compute color client-side
+        const safetyIntensity = metadata.safety_intensity || 0;
+        const significance = metadata.significance || 0.5;
+        const isFiller = metadata.is_filler || false;
+        bgColor = computeTokenColor(safetyIntensity, significance, isFiller);
     }
+
+    span.style.backgroundColor = bgColor;
+    span.style.color = getContrastColor(bgColor);
 
     if (metadata.safety_intensity > 0.3) {
         span.classList.add('safety');
@@ -1870,13 +2022,50 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+/**
+ * Compute token background color based on safety intensity and significance.
+ *
+ * - Safety intensity controls hue (gray→orange→red) and saturation
+ * - Significance controls lightness (dark=filler, light=decision point)
+ * - Result: significant safety tokens are bright red, insignificant are dark/muted
+ *
+ * @param {number} safetyIntensity - 0-1, how dangerous this token is
+ * @param {number} significance - 0-1, how significant this token is (decision vs filler)
+ * @param {boolean} isFiller - explicit filler classification
+ * @returns {string} HSL color string
+ */
+function computeTokenColor(safetyIntensity, significance, isFiller = false) {
+    // Base hue: gray (220) for safe, orange (30) for moderate, red (0) for danger
+    let hue = 220;  // Gray-blue default
+    if (safetyIntensity > 0.5) {
+        hue = 0;  // Red for high danger
+    } else if (safetyIntensity > 0.3) {
+        hue = 30;  // Orange for moderate danger
+    }
+
+    // Saturation: controlled by safety intensity
+    // Low safety = desaturated (gray), high safety = saturated (vivid)
+    // Range: 10% (safe) to 70% (dangerous)
+    const saturation = 10 + (safetyIntensity * 60);
+
+    // Lightness: controlled by significance
+    // Low significance (filler) = dark (15-25%)
+    // High significance (decision) = lighter (40-55%)
+    // This ensures significant safety tokens are bright/visible
+    const minLightness = 15;
+    const maxLightness = isFiller ? 20 : 55;
+    const lightness = minLightness + (significance * (maxLightness - minLightness));
+
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
 function getContrastColor(color) {
     // Handle HSL colors
     if (color && color.startsWith('hsl')) {
         const match = color.match(/hsl\((\d+),\s*(\d+)%?,\s*(\d+)%?\)/);
         if (match) {
             const lightness = parseInt(match[3]);
-            return lightness > 50 ? '#000000' : '#ffffff';
+            return lightness > 45 ? '#000000' : '#ffffff';
         }
     }
 

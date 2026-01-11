@@ -41,6 +41,7 @@ async def list_results():
                     "filename": path.name,
                     "episode_count": len(data.get("episodes", [])),
                     "conditions": data.get("conditions", []),
+                    "suite": data.get("suite"),
                 })
         except Exception:
             pass

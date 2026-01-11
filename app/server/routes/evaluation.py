@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import AsyncGenerator, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -17,6 +17,56 @@ from app.utils.paths import resolve_hatcat_root
 router = APIRouter()
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
+EPISODES_DIR = PROJECT_ROOT / "episodes"
+
+
+def _load_suite_catalog() -> List[dict]:
+    """Load all available episode suites from the episodes directory."""
+    suites = []
+    if not EPISODES_DIR.exists():
+        return suites
+
+    for path in sorted(EPISODES_DIR.glob("*.json")):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except Exception:
+            continue
+
+        suite_meta = data.get("suite", {}) or {}
+        suite_id = suite_meta.get("id") or path.stem
+        suite_name = suite_meta.get("name") or suite_id.replace("_", " ").title()
+
+        suites.append({
+            "id": suite_id,
+            "name": suite_name,
+            "version": suite_meta.get("version"),
+            "notes": suite_meta.get("notes"),
+            "created_at": suite_meta.get("created_at"),
+            "episodes": data.get("episodes", []),
+            "behaviors": data.get("behaviors", []),
+            "global_scoring": data.get("global_scoring", {}),
+            "path": path,
+            "filename": path.name,
+        })
+
+    return suites
+
+
+def _select_suite(suite_id: Optional[str]) -> Optional[dict]:
+    """Return suite entry for the requested ID, defaulting to the first available."""
+    suites = _load_suite_catalog()
+    if not suites:
+        return None
+
+    if suite_id:
+        for suite in suites:
+            if suite["id"] == suite_id or suite["filename"] == suite_id:
+                return suite
+
+        return None
+
+    return suites[0]
 
 
 def get_state():
@@ -29,6 +79,7 @@ class RunRequest(BaseModel):
     conditions: List[str] = ["A", "B", "C"]
     sample_count: int = 1  # Number of samples per episode
     steering_comparison: bool = False  # Run with/without steering for 6-way comparison
+    suite_id: Optional[str] = None  # Which episode suite to use
 
 
 @router.get("/status")
@@ -46,6 +97,8 @@ async def get_run_status():
         "completed_episodes": rs.completed_episodes,
         "current_episode": rs.current_episode,
         "current_condition": rs.current_condition,
+        "suite_id": rs.suite_id,
+        "suite_name": rs.suite_name,
         "conditions": rs.conditions,
         "episode_ids": rs.episode_ids,
         "episode_results": rs.episode_results[-50:],  # Last 50 results
@@ -56,45 +109,74 @@ async def get_run_status():
     }
 
 
+@router.get("/suites")
+async def list_suites():
+    """List available episode suites."""
+    suites = _load_suite_catalog()
+    response = {
+        "suites": [
+            {
+                "id": suite["id"],
+                "name": suite["name"],
+                "version": suite.get("version"),
+                "notes": suite.get("notes"),
+                "created_at": suite.get("created_at"),
+                "episode_count": len(suite.get("episodes", [])),
+                "behavior_count": len(suite.get("behaviors", [])),
+                "filename": suite.get("filename"),
+            }
+            for suite in suites
+        ],
+        "default_suite_id": suites[0]["id"] if suites else None,
+    }
+    return response
+
+
 @router.get("/episodes")
-async def list_episodes():
+async def list_episodes(suite_id: Optional[str] = Query(None)):
     """List available evaluation episodes."""
-    episodes_path = PROJECT_ROOT / "episodes" / "manipulation_suite.json"
+    suite = _select_suite(suite_id)
+    if not suite:
+        message = "Episode suite not found" if suite_id else "No episode suites available"
+        return {"episodes": [], "error": message}
 
-    if not episodes_path.exists():
-        return {"episodes": [], "error": "Episode file not found"}
-
-    with open(episodes_path) as f:
-        data = json.load(f)
-
-    episodes = []
-    for ep in data.get("episodes", []):
-        episodes.append({
+    episodes = [
+        {
             "id": ep["id"],
-            "behavior": ep["behavior"],
+            "behavior": ep.get("behavior", "unknown"),
             "description": ep.get("description", ""),
             "difficulty": ep.get("difficulty", "medium"),
-        })
+        }
+        for ep in suite.get("episodes", [])
+    ]
 
-    return {"episodes": episodes}
+    return {
+        "suite": {
+            "id": suite["id"],
+            "name": suite["name"],
+            "version": suite.get("version"),
+            "notes": suite.get("notes"),
+            "created_at": suite.get("created_at"),
+            "episode_count": len(episodes),
+            "behavior_count": len(suite.get("behaviors", [])),
+        },
+        "episodes": episodes,
+    }
 
 
 @router.get("/episode/{episode_id}")
-async def get_episode(episode_id: str):
+async def get_episode(episode_id: str, suite_id: Optional[str] = Query(None)):
     """Get full episode data including turns."""
-    episodes_path = PROJECT_ROOT / "episodes" / "manipulation_suite.json"
+    suite = _select_suite(suite_id)
+    if not suite:
+        detail = "Episode suite not found" if suite_id else "No episode suites available"
+        raise HTTPException(status_code=404, detail=detail)
 
-    if not episodes_path.exists():
-        raise HTTPException(status_code=404, detail="Episode file not found")
-
-    with open(episodes_path) as f:
-        data = json.load(f)
-
-    for ep in data.get("episodes", []):
-        if ep["id"] == episode_id:
+    for ep in suite.get("episodes", []):
+        if ep.get("id") == episode_id:
             return ep
 
-    raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found")
+    raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found in suite {suite.get('id')}")
 
 
 async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]:
@@ -111,6 +193,15 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
         # Import the HatCat-direct runner
         from app.evaluation.hatcat_runner import HatCatEvaluationRunner
 
+        suite = _select_suite(request.suite_id)
+        if not suite:
+            message = 'Episode suite not found' if request.suite_id else 'No episode suites available'
+            yield f"data: {json.dumps({'type': 'error', 'message': message})}\n\n"
+            return
+
+        suite_id = suite["id"]
+        suite_name = suite["name"]
+
         # Expand conditions if steering_comparison is enabled
         conditions = request.conditions.copy()
         if request.steering_comparison:
@@ -124,9 +215,7 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
             conditions = expanded
 
         # Load episodes
-        episodes_path = PROJECT_ROOT / "episodes" / "manipulation_suite.json"
-        with open(episodes_path) as f:
-            all_episodes = json.load(f).get("episodes", [])
+        all_episodes = suite.get("episodes", [])
 
         episodes = [e for e in all_episodes if e["id"] in request.episode_ids]
 
@@ -148,6 +237,8 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
         rs.completed_episodes = 0
         rs.current_episode = None
         rs.current_condition = None
+        rs.suite_id = suite_id
+        rs.suite_name = suite_name
         rs.conditions = conditions
         rs.episode_ids = request.episode_ids
         rs.episode_results = []
@@ -155,7 +246,7 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
         rs.summary = None
         rs.error_message = None
 
-        yield f"data: {json.dumps({'type': 'start', 'total_episodes': len(request.episode_ids), 'conditions': conditions, 'sample_count': request.sample_count, 'run_id': rs.run_id})}\n\n"
+        yield f"data: {json.dumps({'type': 'start', 'total_episodes': len(request.episode_ids), 'conditions': conditions, 'sample_count': request.sample_count, 'run_id': rs.run_id, 'suite_id': suite_id, 'suite_name': suite_name})}\n\n"
 
         # Get concept pack path from config
         concept_pack_path_str = state.config.get("concept_pack_path", "")
@@ -186,6 +277,11 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
             "conditions": conditions,
             "sample_count": request.sample_count,
             "steering_comparison": request.steering_comparison,
+            "suite": {
+                "id": suite_id,
+                "name": suite_name,
+                "version": suite.get("version"),
+            },
         }
 
         for episode in episodes:

@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Allow overriding the HatCat checkout location via env vars
 DEFAULT_HATCAT_DIR="$SCRIPT_DIR/../HatCat"
 HATCAT_DIR="${HATCAT_DIR:-${HATCAT_ROOT:-$DEFAULT_HATCAT_DIR}}"
+HATCAT_BRANCH="${HATCAT_BRANCH:-main}"
 export HATCAT_ROOT="$HATCAT_DIR"
 
 # Allow overriding host/port from env or config.yaml (if PyYAML available)
@@ -43,11 +44,24 @@ DEFAULT_SERVER_HOST=${DEFAULT_SERVER_HOST:-0.0.0.0}
 DEFAULT_SERVER_PORT=${DEFAULT_SERVER_PORT:-8080}
 SERVER_HOST="${SERVER_HOST:-${CONFIG_SERVER_HOST:-$DEFAULT_SERVER_HOST}}"
 SERVER_PORT="${SERVER_PORT:-${CONFIG_SERVER_PORT:-$DEFAULT_SERVER_PORT}}"
+PUBLIC_DASHBOARD_URL="${PUBLIC_DASHBOARD_URL:-}"
+PUBLIC_DASHBOARD_HOST="${PUBLIC_DASHBOARD_HOST:-}"
+PUBLIC_DASHBOARD_PORT="${PUBLIC_DASHBOARD_PORT:-}" # optional override when forwarded port differs
+PUBLIC_DASHBOARD_SCHEME="${PUBLIC_DASHBOARD_SCHEME:-http}"
+
 DASHBOARD_HOST_DISPLAY="$SERVER_HOST"
 if [ "$DASHBOARD_HOST_DISPLAY" = "0.0.0.0" ] || [ "$DASHBOARD_HOST_DISPLAY" = "::" ]; then
     DASHBOARD_HOST_DISPLAY="127.0.0.1"
 fi
-DASHBOARD_URL="http://${DASHBOARD_HOST_DISPLAY}:${SERVER_PORT}"
+DASHBOARD_PORT_DISPLAY="$SERVER_PORT"
+DASHBOARD_URL="http://${DASHBOARD_HOST_DISPLAY}:${DASHBOARD_PORT_DISPLAY}"
+
+if [ -n "$PUBLIC_DASHBOARD_URL" ]; then
+    DASHBOARD_URL="$PUBLIC_DASHBOARD_URL"
+elif [ -n "$PUBLIC_DASHBOARD_HOST" ]; then
+    port_segment="${PUBLIC_DASHBOARD_PORT:-$SERVER_PORT}"
+    DASHBOARD_URL="${PUBLIC_DASHBOARD_SCHEME}://${PUBLIC_DASHBOARD_HOST}:${port_segment}"
+fi
 VENV_DIR="$SCRIPT_DIR/.venv"
 
 echo "=========================================="
@@ -58,10 +72,26 @@ echo ""
 
 # Step 1: Check/clone HatCat
 if [ ! -d "$HATCAT_DIR" ]; then
-    echo "[1/5] Cloning HatCat repository..."
-    git clone https://github.com/p0ss/HatCat.git "$HATCAT_DIR"
+    echo "[1/5] Cloning HatCat repository (branch $HATCAT_BRANCH)..."
+    git clone --branch "$HATCAT_BRANCH" https://github.com/p0ss/HatCat.git "$HATCAT_DIR"
+elif [ ! -d "$HATCAT_DIR/.git" ]; then
+    echo "[1/5] HatCat directory exists but is not a git repo: $HATCAT_DIR"
+    echo "      Remove or set HATCAT_DIR to a valid clone."
 else
     echo "[1/5] HatCat already present at $HATCAT_DIR"
+    if [ "${HATCAT_UPDATE:-0}" != "0" ]; then
+        echo "      Updating HatCat (branch $HATCAT_BRANCH)..."
+        git -C "$HATCAT_DIR" fetch --all --prune
+        if git -C "$HATCAT_DIR" rev-parse --verify "$HATCAT_BRANCH" >/dev/null 2>&1; then
+            git -C "$HATCAT_DIR" checkout "$HATCAT_BRANCH" >/dev/null 2>&1 || true
+        fi
+        if ! git -C "$HATCAT_DIR" pull --ff-only; then
+            echo "      Fast-forward failed, resetting to origin/$HATCAT_BRANCH"
+            git -C "$HATCAT_DIR" fetch origin "$HATCAT_BRANCH"
+            git -C "$HATCAT_DIR" checkout "$HATCAT_BRANCH"
+            git -C "$HATCAT_DIR" reset --hard "origin/$HATCAT_BRANCH"
+        fi
+    fi
 fi
 
 # Step 2: Create virtual environment
