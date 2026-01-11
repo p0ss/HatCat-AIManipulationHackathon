@@ -5,6 +5,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# HatCat (production) - synced from HatCatDev
 HATCAT_DIR="$SCRIPT_DIR/../HatCat"
 VENV_DIR="$SCRIPT_DIR/.venv"
 

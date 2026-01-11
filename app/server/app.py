@@ -32,6 +32,26 @@ def load_config():
     return {}
 
 
+# Run state for persistence across page refreshes
+class RunState:
+    def __init__(self):
+        self.run_id = None
+        self.status = "idle"  # idle, running, complete, aborted, error
+        self.started_at = None
+        self.completed_at = None
+        self.total_episodes = 0
+        self.completed_episodes = 0
+        self.current_episode = None
+        self.current_condition = None
+        self.conditions = []
+        self.episode_ids = []
+        # Store completed results for display
+        self.episode_results = []  # List of {episode_id, condition, result}
+        self.tokens_buffer = []  # Recent tokens for current episode
+        self.summary = None
+        self.error_message = None
+
+
 # Global state
 class AppState:
     def __init__(self):
@@ -42,7 +62,7 @@ class AppState:
         self.generator = None
         self.model_loaded = False
         self.lens_loaded = False
-        self.current_run = None
+        self.run_state = RunState()
         self.abort_requested = False
 
 

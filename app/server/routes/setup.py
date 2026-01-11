@@ -245,94 +245,112 @@ async def lens_download_generator() -> AsyncGenerator[str, None]:
 
         await asyncio.sleep(0.1)
 
-        # Get config
+        # Get config - check for local lens pack first
         lens_config = state.config.get("lens_pack", {})
-        repo_id = lens_config.get("repo_id", "HatCatFTW/lens-gemma-3-4b-first-light-v1")
-        pack_name = lens_config.get("name", "gemma-3-4b-first-light-v1")
 
-        yield f"data: {json.dumps({'type': 'progress', 'percent': 30, 'message': f'Downloading {pack_name} from HuggingFace...'})}\n\n"
-        await asyncio.sleep(0.1)
+        # Initialize paths
+        lens_pack_path = None
+        hierarchy_path = None
 
-        # Pull lens pack with stdout capture
-        registry = PackRegistry()
-        yield f"data: {json.dumps({'type': 'progress', 'percent': 35, 'message': 'Contacting HuggingFace Hub...'})}\n\n"
-        await asyncio.sleep(0.1)
+        # Use existing local lens pack if available (much faster than downloading)
+        # The actual lens pack with .pt files is in src/lens_packs/
+        local_pack_path = HATCAT_ROOT / "src" / "lens_packs" / "gemma-3-4b-first-light-v1"
+        local_hierarchy_path = HATCAT_ROOT / "concept_packs" / "first-light" / "hierarchy"
 
-        # Run download in thread with real-time output capture
-        import threading
-        import queue
+        if local_pack_path.exists():
+            yield f"data: {json.dumps({'type': 'progress', 'percent': 50, 'message': f'Using local lens pack: {local_pack_path}'})}\n\n"
+            lens_pack_path = local_pack_path
+            hierarchy_path = local_hierarchy_path if local_hierarchy_path.exists() else None
+        else:
+            # Fall back to download
+            repo_id = lens_config.get("repo_id", "HatCatFTW/lens-gemma-3-4b-first-light-v1")
+            pack_name = lens_config.get("name", "gemma-3-4b-first-light-v1")
 
-        output_queue = queue.Queue()
-        download_complete = threading.Event()
-        download_error = [None]
+            yield f"data: {json.dumps({'type': 'progress', 'percent': 30, 'message': f'Downloading {pack_name} from HuggingFace...'})}\n\n"
+            await asyncio.sleep(0.1)
 
-        class QueueWriter:
-            """Stdout wrapper that sends lines to a queue."""
-            def __init__(self, q, original):
-                self.queue = q
-                self.original = original
-                self.buffer = ""
+            # Pull lens pack with stdout capture
+            registry = PackRegistry()
+            yield f"data: {json.dumps({'type': 'progress', 'percent': 35, 'message': 'Contacting HuggingFace Hub...'})}\n\n"
+            await asyncio.sleep(0.1)
 
-            def write(self, text):
-                self.original.write(text)  # Also write to terminal
-                self.buffer += text
-                while '\n' in self.buffer:
-                    line, self.buffer = self.buffer.split('\n', 1)
-                    if line.strip():
-                        self.queue.put(line.strip())
+            # Run download in thread with real-time output capture
+            import threading
+            import queue
 
-            def flush(self):
-                self.original.flush()
-                if self.buffer.strip():
-                    self.queue.put(self.buffer.strip())
+            output_queue = queue.Queue()
+            download_complete = threading.Event()
+            download_error = [None]
+
+            class QueueWriter:
+                """Stdout wrapper that sends lines to a queue."""
+                def __init__(self, q, original):
+                    self.queue = q
+                    self.original = original
                     self.buffer = ""
 
-        def do_download():
-            try:
-                old_stdout = sys.stdout
-                sys.stdout = QueueWriter(output_queue, old_stdout)
+                def write(self, text):
+                    self.original.write(text)  # Also write to terminal
+                    self.buffer += text
+                    while '\n' in self.buffer:
+                        line, self.buffer = self.buffer.split('\n', 1)
+                        if line.strip():
+                            self.queue.put(line.strip())
+
+                def flush(self):
+                    self.original.flush()
+                    if self.buffer.strip():
+                        self.queue.put(self.buffer.strip())
+                        self.buffer = ""
+
+            def do_download():
                 try:
-                    registry.pull_lens_pack(pack_name, repo_id=repo_id)
+                    old_stdout = sys.stdout
+                    sys.stdout = QueueWriter(output_queue, old_stdout)
+                    try:
+                        registry.pull_lens_pack(pack_name, repo_id=repo_id)
+                    finally:
+                        sys.stdout.flush()
+                        sys.stdout = old_stdout
+                except Exception as e:
+                    download_error[0] = e
                 finally:
-                    sys.stdout.flush()
-                    sys.stdout = old_stdout
-            except Exception as e:
-                download_error[0] = e
-            finally:
-                download_complete.set()
+                    download_complete.set()
 
-        thread = threading.Thread(target=do_download)
-        thread.start()
+            thread = threading.Thread(target=do_download)
+            thread.start()
 
-        # Stream progress while downloading
-        progress = 40
-        while not download_complete.is_set():
-            await asyncio.sleep(0.2)
-            # Drain the queue
+            # Stream progress while downloading
+            progress = 40
+            while not download_complete.is_set():
+                await asyncio.sleep(0.2)
+                # Drain the queue
+                while True:
+                    try:
+                        line = output_queue.get_nowait()
+                        if line:
+                            progress = min(progress + 1, 78)
+                            yield f"data: {json.dumps({'type': 'progress', 'percent': progress, 'message': line[:120]})}\n\n"
+                    except queue.Empty:
+                        break
+
+            thread.join()
+
+            # Drain any remaining messages
             while True:
                 try:
                     line = output_queue.get_nowait()
                     if line:
-                        progress = min(progress + 1, 78)
-                        yield f"data: {json.dumps({'type': 'progress', 'percent': progress, 'message': line[:120]})}\n\n"
+                        yield f"data: {json.dumps({'type': 'progress', 'percent': 79, 'message': line[:120]})}\n\n"
                 except queue.Empty:
                     break
 
-        thread.join()
+            if download_error[0]:
+                raise download_error[0]
 
-        # Drain any remaining messages
-        while True:
-            try:
-                line = output_queue.get_nowait()
-                if line:
-                    yield f"data: {json.dumps({'type': 'progress', 'percent': 79, 'message': line[:120]})}\n\n"
-            except queue.Empty:
-                break
+            lens_pack_path = registry.lens_packs_dir / pack_name
 
-        if download_error[0]:
-            raise download_error[0]
-
-        yield f"data: {json.dumps({'type': 'progress', 'percent': 80, 'message': 'Lens pack downloaded!'})}\n\n"
+        yield f"data: {json.dumps({'type': 'progress', 'percent': 80, 'message': 'Lens pack ready!'})}\n\n"
         await asyncio.sleep(0.1)
 
         # Initialize lens manager if model is loaded
@@ -342,17 +360,68 @@ async def lens_download_generator() -> AsyncGenerator[str, None]:
 
             from src.hat.monitoring.lens_manager import DynamicLensManager
 
-            # Get the actual path where lens pack was downloaded
-            lens_pack_path = registry.lens_packs_dir / pack_name
+            # lens_pack_path was set above (either from local or download)
             yield f"data: {json.dumps({'type': 'status', 'message': f'Lens pack at: {lens_pack_path}'})}\n\n"
 
-            state.lens_manager = DynamicLensManager(
-                lenses_dir=lens_pack_path,
-                base_layers=[2, 3],
-                load_threshold=0.3,
-                max_loaded_lenses=1000,
-                device="cuda" if torch.cuda.is_available() else "cpu",
-            )
+            # Build kwargs for DynamicLensManager
+            # Let the deployment manifest control base_layers and dynamic loading
+            lens_manager_kwargs = {
+                "lenses_dir": lens_pack_path,
+                "load_threshold": 0.3,
+                "max_loaded_lenses": 500,  # Match manifest's max_loaded_concepts
+                "device": "cuda" if torch.cuda.is_available() else "cpu",
+                "use_activation_lenses": True,
+            }
+
+            # Add hierarchy path if we have local concept metadata
+            if hierarchy_path is not None and hierarchy_path.exists():
+                lens_manager_kwargs["layers_data_dir"] = hierarchy_path
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Concept hierarchy at: {hierarchy_path}'})}\n\n"
+
+            # Check for deployment manifest - this controls base_layers
+            manifest_path = lens_pack_path / "deployment_manifest.json"
+            if manifest_path.exists():
+                lens_manager_kwargs["manifest_path"] = manifest_path
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Using deployment manifest for layer config'})}\n\n"
+
+            state.lens_manager = DynamicLensManager(**lens_manager_kwargs)
+
+            # DEBUG: Check what's loaded
+            loaded_count = len(state.lens_manager.cache.loaded_lenses)
+            print(f"[SETUP DEBUG] Loaded lenses: {loaded_count}")
+            if loaded_count > 0:
+                sample_keys = list(state.lens_manager.cache.loaded_lenses.keys())[:5]
+                print(f"[SETUP DEBUG] Sample lens keys: {sample_keys}")
+
+            # Check calibration was loaded
+            if state.lens_manager.manifest and state.lens_manager.manifest.concept_calibration:
+                cal_count = len(state.lens_manager.manifest.concept_calibration)
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Calibration loaded for {cal_count} concepts (scores normalized)'})}\n\n"
+                print(f"[SETUP DEBUG] Calibration data loaded for {cal_count} concepts")
+            else:
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Warning: No calibration data - scores may be noisy'})}\n\n"
+                print("[SETUP DEBUG] Warning: No calibration data loaded")
+
+            # HushedGenerator sets lens_manager.last_detections directly, we just need
+            # to ensure it's accessible. Initialize as empty list.
+            state.lens_manager.last_detections = []
+
+            # Save lens_pack_path to config for evaluation runner
+            if "lens_pack" not in state.config:
+                state.config["lens_pack"] = {}
+            state.config["lens_pack"]["local_path"] = str(lens_pack_path)
+
+            # Add concept_pack_path to config for auto-contrastive selection in HUSH
+            # The concept pack is the parent directory of the hierarchy folder
+            if hierarchy_path is not None and hierarchy_path.exists():
+                concept_pack_path = hierarchy_path.parent
+                state.config["concept_pack_path"] = str(concept_pack_path)
+                yield f"data: {json.dumps({'type': 'status', 'message': f'Concept pack for contrastive steering: {concept_pack_path.name}'})}\n\n"
+
+            loaded_count = len(state.lens_manager.cache.loaded_lenses)
+            total_available = len(state.lens_manager.concept_metadata)
+            yield f"data: {json.dumps({'type': 'status', 'message': f'Loaded {loaded_count} base lenses ({total_available} concepts available)'})}\n\n"
+
             state.lens_loaded = True
 
             yield f"data: {json.dumps({'type': 'progress', 'percent': 100, 'message': 'Lens pack ready!'})}\n\n"

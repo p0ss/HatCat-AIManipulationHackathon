@@ -1,0 +1,215 @@
+/* HatCat FTW - AI Manipulation Detection Dashboard */
+/* Styles that complement DaisyUI */
+
+/* ============================================================================
+   Pages
+   ============================================================================ */
+
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+/* ============================================================================
+   Token Stream
+   ============================================================================ */
+
+.token-stream {
+    line-height: 1.8;
+}
+
+.hatcat-token {
+    display: inline-block;
+    padding: 2px 4px;
+    margin: 2px;
+    border-radius: 4px;
+    cursor: help;
+    transition: transform 0.1s, box-shadow 0.1s;
+    position: relative;
+}
+
+.hatcat-token:hover {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+
+/* Token with violations - red ring */
+.hatcat-token.safety {
+    box-shadow: 0 0 0 2px oklch(var(--er));
+}
+
+/* Token with steering applied - yellow ring + indicator */
+.hatcat-token.steering {
+    box-shadow: 0 0 0 2px oklch(var(--wa));
+}
+
+.hatcat-token .steering-indicator {
+    position: absolute;
+    top: -8px;
+    right: -4px;
+    font-size: 12px;
+    line-height: 1;
+    text-shadow: 0 0 4px oklch(var(--wa));
+}
+
+/* ============================================================================
+   Turn Display (for episode preview and run page)
+   ============================================================================ */
+
+.turn-user {
+    border-left-color: oklch(var(--in));
+}
+
+.turn-assistant {
+    border-left-color: oklch(var(--bc) / 0.3);
+}
+
+.turn-system {
+    border-left-color: oklch(var(--s));
+}
+
+.turn-evaluator {
+    border-left-color: oklch(var(--wa));
+}
+
+/* ============================================================================
+   XDB Log Viewer
+   ============================================================================ */
+
+.xdb-entry {
+    border-bottom: 1px solid oklch(var(--bc) / 0.1);
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.xdb-token {
+    font-weight: bold;
+    color: oklch(var(--in));
+}
+
+.xdb-concepts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.xdb-concept {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+}
+
+.xdb-intervention {
+    margin-top: 4px;
+    padding: 8px;
+    background: oklch(var(--s) / 0.1);
+    border-radius: 4px;
+    border: 1px solid oklch(var(--s) / 0.3);
+}
+
+/* ============================================================================
+   Scrollbar styling (optional, for WebKit browsers)
+   ============================================================================ */
+
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: oklch(var(--b2));
+}
+
+::-webkit-scrollbar-thumb {
+    background: oklch(var(--bc) / 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: oklch(var(--bc) / 0.5);
+}
+
+/* ============================================================================
+   Progress animations
+   ============================================================================ */
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 5px oklch(var(--p) / 0.5); }
+    50% { box-shadow: 0 0 15px oklch(var(--p) / 0.8); }
+}
+
+.progress-primary[value]:not([value="0"]):not([value="100"]) {
+    animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ============================================================================
+   Plotly chart container styling
+   ============================================================================ */
+
+#comparison-chart,
+#intervention-chart {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+/* Make Plotly respect dark theme */
+.js-plotly-plot .plotly .modebar {
+    background: transparent !important;
+}
+
+.js-plotly-plot .plotly .modebar-btn svg {
+    fill: oklch(var(--bc) / 0.6) !important;
+}
+
+.js-plotly-plot .plotly .modebar-btn:hover svg {
+    fill: oklch(var(--p)) !important;
+}
+
+/* ============================================================================
+   History Navigation
+   ============================================================================ */
+
+#history-nav {
+    transition: opacity 0.2s ease;
+}
+
+#history-nav .history-counter {
+    min-width: 80px;
+    font-variant-numeric: tabular-nums;
+}
+
+#history-nav .history-live {
+    font-weight: bold;
+    font-size: 10px;
+}
+
+#history-nav .history-live.btn-primary {
+    animation: pulse-live 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Pulse animation for results button */
+@keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+    50% { transform: scale(1.02); box-shadow: 0 0 20px 5px rgba(16, 185, 129, 0.4); }
+}
+
+/* Visual indicator when viewing history (not live) */
+.token-stream.viewing-history {
+    border: 2px dashed oklch(var(--wa) / 0.5);
+}
+
+/* History badge in episode info */
+.badge-ghost.badge-sm {
+    font-size: 10px;
+    padding: 0 4px;
+}
