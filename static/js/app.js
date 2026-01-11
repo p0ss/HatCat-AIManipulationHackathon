@@ -583,8 +583,10 @@ function renderTurnsHtml(turns) {
     if (convoTurns.length) {
         parts.push(convoTurns.map(turn => {
             const speaker = turn.speaker || 'user';
+            const bgColor = getSpeakerBgColor(speaker);
+            const borderColor = getSpeakerBorderColor(speaker);
             return `
-                <div class="p-2 rounded border-l-4 ${getSpeakerBorderColor(speaker)} bg-base-200">
+                <div class="p-3 rounded ${borderColor} ${bgColor}">
                     <div class="text-xs font-bold uppercase mb-1 text-${getSpeakerColor(speaker)}">${speaker}</div>
                     <div class="text-sm">${escapeHtml(turn.content || '(Assistant response)')}</div>
                 </div>
@@ -773,7 +775,7 @@ async function loadEpisodeTurns(episodeId) {
 function getSpeakerColor(speaker) {
     switch (speaker) {
         case 'user': return 'info';
-        case 'assistant': return 'base-content/70';
+        case 'assistant': return 'success';
         case 'system': return 'secondary';
         case 'evaluator': return 'warning';
         default: return 'base-content/70';
@@ -782,11 +784,21 @@ function getSpeakerColor(speaker) {
 
 function getSpeakerBorderColor(speaker) {
     switch (speaker) {
-        case 'user': return 'border-info';
-        case 'assistant': return 'border-base-content/30';
-        case 'system': return 'border-secondary';
-        case 'evaluator': return 'border-warning';
+        case 'user': return 'border-info border-l-4';
+        case 'assistant': return 'border-success border-l-4';
+        case 'system': return 'border-secondary border-l-4';
+        case 'evaluator': return 'border-warning border-l-4';
         default: return 'border-base-content/30';
+    }
+}
+
+function getSpeakerBgColor(speaker) {
+    switch (speaker) {
+        case 'user': return 'bg-info/10';
+        case 'assistant': return 'bg-success/10';
+        case 'system': return 'bg-secondary/10';
+        case 'evaluator': return 'bg-warning/10';
+        default: return 'bg-base-200';
     }
 }
 
@@ -946,11 +958,12 @@ function handleRunEvent(data) {
             conditionLabel.textContent = data.condition;
             conditionLabel.className = `font-bold ml-2 text-${getConditionColor(data.condition)}`;
 
-            // Clear the response area and show generating indicator
+            // Clear BOTH conversation and response areas for new episode
+            const convoEl = document.getElementById('live-conversation');
             const responseEl = document.getElementById('live-response');
             const placeholder = document.getElementById('live-placeholder');
+            if (convoEl) convoEl.innerHTML = '';  // Clear previous episode's turns
             if (responseEl) responseEl.innerHTML = '<span class="text-base-content/50 animate-pulse">Generating...</span>';
-            // Keep conversation from episode_turns event
             if (placeholder) placeholder.classList.add('hidden');
 
             clearRunPanels();
