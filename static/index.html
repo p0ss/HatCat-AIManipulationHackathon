@@ -102,6 +102,60 @@
                 </div>
             </div>
 
+            <!-- Lens Pack Stability (Statistical Estimation) -->
+            <div id="stability-card" class="card bg-base-100 shadow-xl hidden">
+                <div class="card-body">
+                    <div class="flex justify-between items-start">
+                        <h3 class="card-title">Lens Pack Stability</h3>
+                        <div id="stability-status-badge" class="badge badge-info gap-2">Loading...</div>
+                    </div>
+                    <p class="text-base-content/70 text-sm">Quality metrics from cross-activation calibration (training data)</p>
+
+                    <div class="stats stats-vertical lg:stats-horizontal shadow mt-4">
+                        <div class="stat">
+                            <div class="stat-title text-xs">Low Cross-fire</div>
+                            <div class="stat-value text-lg" id="stat-diagonal-topk">-</div>
+                            <div class="stat-desc">&lt;10% false positives</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title text-xs">Good Signal Gap</div>
+                            <div class="stat-value text-lg" id="stat-jaccard">-</div>
+                            <div class="stat-desc">&gt;0.2 self vs cross</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title text-xs">Stable Lenses</div>
+                            <div class="stat-value text-lg text-success" id="stat-stable">-</div>
+                            <div class="stat-desc">Low cross-fire rate</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-title text-xs">Unstable Lenses</div>
+                            <div class="stat-value text-lg text-warning" id="stat-unstable">-</div>
+                            <div class="stat-desc">High cross-fire rate</div>
+                        </div>
+                    </div>
+
+                    <div class="collapse collapse-arrow bg-base-200 mt-4">
+                        <input type="checkbox" />
+                        <div class="collapse-title text-sm font-medium">
+                            About Calibration Metrics
+                        </div>
+                        <div class="collapse-content text-sm text-base-content/70">
+                            <p class="mb-2"><strong>Cross-fire Rate:</strong> How often a lens fires on concepts it wasn't trained for. Lower is better (&lt;10% = stable).</p>
+                            <p class="mb-2"><strong>Signal Gap:</strong> Difference between self-activation (on target concept) and cross-activation (on other concepts). Higher gap = better discrimination.</p>
+                            <p><strong>Stable vs Unstable:</strong> Lenses with low cross-fire rates are reliable for detection. Unstable lenses may produce false positives.</p>
+                        </div>
+                    </div>
+
+                    <div id="over-firing-alert" class="alert bg-base-200 text-base-content/70 mt-4 hidden">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-5 w-5 opacity-50" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        <div class="text-sm">
+                            <span class="opacity-70">Over-firing (informational):</span>
+                            <span id="over-firing-list" class="ml-1 opacity-60"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Console -->
             <div class="card bg-base-100 shadow-xl">
                 <div class="card-body">
@@ -415,8 +469,12 @@
                                 </div>
                             </div>
 
-                            <div id="live-tokens" class="token-stream flex-1 min-h-64 max-h-96 overflow-y-auto p-4 bg-base-300 rounded-lg mt-4">
-                                <p class="text-base-content/50">Tokens appear here during generation...</p>
+                            <div id="live-tokens" class="token-stream flex-1 min-h-64 max-h-[32rem] overflow-y-auto p-4 bg-base-300 rounded-lg mt-4">
+                                <!-- Conversation turns will be inserted here -->
+                                <div id="live-conversation" class="space-y-3 mb-4"></div>
+                                <!-- Streaming response appears here -->
+                                <div id="live-response" class="pl-4 border-l-2 border-primary/30"></div>
+                                <p id="live-placeholder" class="text-base-content/50">Tokens appear here during generation...</p>
                             </div>
 
                             <div id="concept-legend" class="mt-4 text-xs text-base-content/60">

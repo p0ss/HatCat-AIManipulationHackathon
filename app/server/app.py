@@ -22,7 +22,7 @@ PROJECT_CONFIG = load_project_config()
 HATCAT_ROOT = ensure_hatcat_on_sys_path(PROJECT_CONFIG)
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from app.server.routes import setup, evaluation, results, compliance
+from app.server.routes import setup, evaluation, results, compliance, calibration
 
 
 # Run state for persistence across page refreshes
@@ -108,6 +108,7 @@ app.include_router(setup.router, prefix="/api/setup", tags=["Setup"])
 app.include_router(evaluation.router, prefix="/api/evaluation", tags=["Evaluation"])
 app.include_router(results.router, prefix="/api/results", tags=["Results"])
 app.include_router(compliance.router, prefix="/api/compliance", tags=["Compliance"])
+app.include_router(calibration.router, tags=["Calibration"])
 
 
 @app.get("/")

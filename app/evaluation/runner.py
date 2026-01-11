@@ -722,27 +722,52 @@ class ABCEvaluationRunner:
 
     def _build_prompt(self, episode: Dict) -> str:
         """Build prompt string from episode definition."""
-        parts = []
+        parts: List[str] = []
 
-        # System/setup context
-        if "setup" in episode:
-            setup = episode["setup"]
-            if "system" in setup:
-                parts.append(f"System: {setup['system']}")
-            if "context" in setup:
-                parts.append(f"Context: {setup['context']}")
+        prelude = self._build_prelude_lines(episode)
+        for line in prelude:
+            parts.append(f"System: {line}")
 
-        # Turns
         for turn in episode.get("turns", []):
-            speaker = turn.get("speaker", "user")
+            speaker = turn.get("speaker", turn.get("role", "user"))
             content = turn.get("content", "")
-            if content:
-                parts.append(f"{speaker.capitalize()}: {content}")
+            parts.append(f"{speaker.capitalize()}: {content}")
 
-        # Add assistant prompt
         parts.append("Assistant:")
-
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _build_prelude_lines(episode: Dict) -> List[str]:
+        instructions: List[str] = []
+        roles = episode.get("roles") or {}
+        system_role = roles.get("system")
+        if system_role:
+            instructions.append(system_role)
+
+        setup = episode.get("setup") or {}
+        context = setup.get("context")
+        if context:
+            instructions.append(context)
+
+        temptation = setup.get("temptation")
+        if isinstance(temptation, dict):
+            temptation_parts = []
+            t_type = temptation.get("type")
+            if t_type:
+                temptation_parts.append(f"Temptation type: {t_type.replace('_', ' ')}")
+            description = temptation.get("description") or temptation.get("notes")
+            if description:
+                temptation_parts.append(description)
+            metric = temptation.get("metric")
+            if metric:
+                temptation_parts.append(f"Metric: {metric}")
+            incentive = temptation.get("incentive")
+            if incentive:
+                temptation_parts.append(f"Incentive: {incentive}")
+            if temptation_parts:
+                instructions.append(" ".join(temptation_parts))
+
+        return instructions
 
     def _generate_baseline(self, prompt: str) -> str:
         """Generate response without monitoring (condition A)."""

@@ -261,6 +261,9 @@ async function checkStatus() {
             btn.classList.remove('btn-primary');
             document.getElementById('lens-progress').value = 100;
             document.getElementById('lens-progress-text').textContent = 'Lens pack loaded';
+
+            // Load stability metrics after lens is ready
+            loadStabilityMetrics();
         }
 
         // Show setup complete banner
@@ -522,6 +525,76 @@ function renderSuiteSummary(meta) {
     }
 }
 
+function buildClientPreviewTurns(episode) {
+    const preview = [];
+    const systemRole = episode.roles?.system;
+    if (systemRole) {
+        preview.push({ speaker: 'system', content: systemRole });
+    }
+
+    const context = episode.setup?.context;
+    if (context) {
+        preview.push({ speaker: 'setup', content: context });
+    }
+
+    const temptation = episode.setup?.temptation;
+    if (temptation) {
+        const pieces = [];
+        if (temptation.type) pieces.push(`Temptation type: ${temptation.type}`);
+        if (temptation.description) pieces.push(temptation.description);
+        else if (temptation.notes) pieces.push(temptation.notes);
+        if (temptation.metric) pieces.push(`Metric: ${temptation.metric}`);
+        if (temptation.incentive) pieces.push(`Incentive: ${temptation.incentive}`);
+        if (pieces.length) {
+            preview.push({ speaker: 'setup', content: pieces.join(' ') });
+        }
+    }
+
+    if (Array.isArray(episode.turns)) {
+        preview.push(...episode.turns);
+    }
+
+    return preview;
+}
+
+function renderTurnsHtml(turns) {
+    if (!Array.isArray(turns) || turns.length === 0) {
+        return '<p class="text-base-content/50">No turns defined</p>';
+    }
+
+    const metaTurns = turns.filter(t => t.meta);
+    const convoTurns = turns.filter(t => !t.meta);
+    const parts = [];
+
+    if (metaTurns.length) {
+        parts.push(`<div class="space-y-2 mb-3">
+            ${metaTurns.map(turn => {
+                const label = turn.meta === 'setup_temptation' ? 'Temptation' : 'Setup';
+                return `
+                    <div class="p-2 rounded bg-base-200 border-l-4 border-info">
+                        <div class="text-xs uppercase text-info mb-1 tracking-wide">${label}</div>
+                        <div class="text-sm">${escapeHtml(turn.content || '')}</div>
+                    </div>
+                `;
+            }).join('')}
+        </div>`);
+    }
+
+    if (convoTurns.length) {
+        parts.push(convoTurns.map(turn => {
+            const speaker = turn.speaker || 'user';
+            return `
+                <div class="p-2 rounded border-l-4 ${getSpeakerBorderColor(speaker)} bg-base-200">
+                    <div class="text-xs font-bold uppercase mb-1 text-${getSpeakerColor(speaker)}">${speaker}</div>
+                    <div class="text-sm">${escapeHtml(turn.content || '(Assistant response)')}</div>
+                </div>
+            `;
+        }).join(''));
+    }
+
+    return parts.join('');
+}
+
 async function handleSuiteChange(selectEl) {
     const value = typeof selectEl === 'string' ? selectEl : selectEl?.value;
     if (!value || value === AppState.selectedSuiteId) return;
@@ -689,28 +762,8 @@ async function loadEpisodeTurns(episodeId) {
         const episode = await response.json();
 
         const turnsContainer = document.getElementById('episode-turns');
-        const turns = episode.turns || [];
-
-        if (turns.length === 0) {
-            turnsContainer.innerHTML = '<p class="text-base-content/50">No turns defined</p>';
-            return;
-        }
-
-        turnsContainer.innerHTML = turns.map(turn => {
-            const speaker = turn.speaker || 'user';
-            const borderColor = speaker === 'user' ? 'border-info' :
-                               speaker === 'assistant' ? 'border-base-content/30' :
-                               speaker === 'system' ? 'border-secondary' : 'border-warning';
-            const textColor = speaker === 'user' ? 'text-info' :
-                             speaker === 'assistant' ? 'text-base-content/70' :
-                             speaker === 'system' ? 'text-secondary' : 'text-warning';
-            return `
-                <div class="p-3 rounded border-l-4 ${borderColor} bg-base-200">
-                    <div class="text-xs font-bold uppercase mb-1 ${textColor}">${speaker}</div>
-                    <div class="text-sm">${escapeHtml(turn.content || '(Assistant response)')}</div>
-                </div>
-            `;
-        }).join('');
+        const turns = episode.preview_turns || buildClientPreviewTurns(episode);
+        turnsContainer.innerHTML = renderTurnsHtml(turns);
 
     } catch (error) {
         document.getElementById('episode-turns').innerHTML = '<p class="text-base-content/50">Could not load turns</p>';
@@ -853,25 +906,25 @@ function handleRunEvent(data) {
             }
             break;
 
-        case 'episode_turns':
-            // Display episode turns before generation starts
-            if (turnsEl && data.turns) {
-                const turnsHtml = data.turns.map(turn => {
-                    const speaker = turn.speaker || 'user';
-                    return `
-                        <div class="p-2 rounded border-l-4 ${getSpeakerBorderColor(speaker)} bg-base-200">
-                            <div class="text-xs font-bold uppercase mb-1 text-${getSpeakerColor(speaker)}">${speaker}</div>
-                            <div class="text-sm">${escapeHtml(turn.content || '(Assistant response)')}</div>
-                        </div>
-                    `;
-                }).join('');
-                turnsEl.innerHTML = turnsHtml;
+        case 'episode_turns': {
+            // Display episode turns in the live generation area (chat-style)
+            const convoEl = document.getElementById('live-conversation');
+            const placeholderEl = document.getElementById('live-placeholder');
+            if (convoEl && data.turns) {
+                const turnsHtml = renderTurnsHtml(data.turns);
+                convoEl.innerHTML = turnsHtml;
+                if (placeholderEl) placeholderEl.classList.add('hidden');
                 // Save for history
                 AppState.liveTurnsHtml = turnsHtml;
             }
+            // Also update the side panel for reference
+            if (turnsEl && data.turns) {
+                turnsEl.innerHTML = renderTurnsHtml(data.turns);
+            }
             break;
+        }
 
-        case 'episode_start':
+        case 'episode_start': {
             // Save previous episode to history before starting new one
             if (AppState.liveTokens.length > 0) {
                 saveCurrentToHistory();
@@ -893,16 +946,18 @@ function handleRunEvent(data) {
             conditionLabel.textContent = data.condition;
             conditionLabel.className = `font-bold ml-2 text-${getConditionColor(data.condition)}`;
 
-            // Don't clear tokens yet - keep previous visible until first token arrives
-            // Just show a loading indicator
-            if (tokensEl.children.length === 0 || tokensEl.querySelector('.text-gray-500')) {
-                tokensEl.innerHTML = '<span class="text-gray-500">Generating...</span>';
-            }
+            // Clear the response area and show generating indicator
+            const responseEl = document.getElementById('live-response');
+            const placeholder = document.getElementById('live-placeholder');
+            if (responseEl) responseEl.innerHTML = '<span class="text-base-content/50 animate-pulse">Generating...</span>';
+            // Keep conversation from episode_turns event
+            if (placeholder) placeholder.classList.add('hidden');
 
             clearRunPanels();
             updateHistoryNav();
             logToRunLog(`Running ${data.episode_id} [${data.condition}]`, 'info');
             break;
+        }
 
         case 'token':
             // Live token streaming with highlighting
@@ -973,23 +1028,28 @@ function handleRunEvent(data) {
 }
 
 function appendToken(token, metadata = {}) {
-    const container = document.getElementById('live-tokens');
+    const mainContainer = document.getElementById('live-tokens');
+    const responseContainer = document.getElementById('live-response');
+    const placeholder = document.getElementById('live-placeholder');
 
     // Don't append if we're viewing history (not live)
     if (AppState.currentHistoryIndex !== -1) {
         return;
     }
 
-    // On first token, clear the container (removes placeholder or previous episode)
+    // On first token, clear the response area and hide placeholder
     if (AppState.liveTokens.length === 1) {
-        container.innerHTML = '';
+        if (responseContainer) responseContainer.innerHTML = '';
+        if (placeholder) placeholder.classList.add('hidden');
     }
 
-    appendTokenDirect(container, token, metadata);
-    container.scrollTop = container.scrollHeight;
+    // Append to response container (or fallback to main)
+    const targetContainer = responseContainer || mainContainer;
+    appendTokenDirect(targetContainer, token, metadata);
+    mainContainer.scrollTop = mainContainer.scrollHeight;
 
     // Update token count
-    const count = container.querySelectorAll('.hatcat-token').length;
+    const count = mainContainer.querySelectorAll('.hatcat-token').length;
     document.getElementById('token-count').textContent = `${count} tokens`;
 }
 
@@ -1883,14 +1943,29 @@ function showHistoryEntry(index) {
         }
     }
 
-    // Render tokens
+    // Render in chat-style layout
     const tokensEl = document.getElementById('live-tokens');
-    tokensEl.innerHTML = '';
+    const liveConvo = document.getElementById('live-conversation');
+    const liveResponse = document.getElementById('live-response');
+    const livePlaceholder = document.getElementById('live-placeholder');
+
     tokensEl.classList.add('viewing-history');
 
-    entry.tokens.forEach((token, i) => {
-        appendTokenDirect(tokensEl, token, entry.metadata[i] || {});
-    });
+    // Show conversation turns
+    if (liveConvo) {
+        liveConvo.innerHTML = entry.turnsHtml || '';
+    }
+
+    // Show tokens in response area
+    if (liveResponse) {
+        liveResponse.innerHTML = '';
+        entry.tokens.forEach((token, i) => {
+            appendTokenDirect(liveResponse, token, entry.metadata[i] || {});
+        });
+    }
+
+    // Hide placeholder
+    if (livePlaceholder) livePlaceholder.classList.add('hidden');
 
     // Update token count
     document.getElementById('token-count').textContent = `${entry.tokens.length} tokens`;
@@ -1898,20 +1973,33 @@ function showHistoryEntry(index) {
 
 function showLiveTokens() {
     const tokensEl = document.getElementById('live-tokens');
+    const liveConvo = document.getElementById('live-conversation');
+    const liveResponse = document.getElementById('live-response');
+    const livePlaceholder = document.getElementById('live-placeholder');
 
-    // Re-render current live tokens
-    tokensEl.innerHTML = '';
     tokensEl.classList.remove('viewing-history');
 
-    if (AppState.liveTokens.length === 0) {
-        tokensEl.innerHTML = '<span class="text-gray-500">Generating...</span>';
-    } else {
-        AppState.liveTokens.forEach((token, i) => {
-            appendTokenDirect(tokensEl, token, AppState.liveMetadata[i] || {});
-        });
+    // Restore conversation turns
+    if (liveConvo && AppState.liveTurnsHtml) {
+        liveConvo.innerHTML = AppState.liveTurnsHtml;
     }
 
-    // Restore live turns
+    // Restore tokens in response area
+    if (liveResponse) {
+        liveResponse.innerHTML = '';
+        if (AppState.liveTokens.length === 0) {
+            liveResponse.innerHTML = '<span class="text-base-content/50 animate-pulse">Generating...</span>';
+        } else {
+            AppState.liveTokens.forEach((token, i) => {
+                appendTokenDirect(liveResponse, token, AppState.liveMetadata[i] || {});
+            });
+        }
+    }
+
+    // Hide placeholder
+    if (livePlaceholder) livePlaceholder.classList.add('hidden');
+
+    // Restore live turns in side panel
     const turnsEl = document.getElementById('episode-turns-display');
     if (turnsEl && AppState.liveTurnsHtml) {
         turnsEl.innerHTML = AppState.liveTurnsHtml;
@@ -2082,10 +2170,74 @@ function getContrastColor(color) {
 }
 
 // ============================================================================
+// Calibration Stability Metrics
+// ============================================================================
+
+async function loadStabilityMetrics() {
+    /**
+     * Fetch and display calibration stability metrics.
+     * Called after lens pack is loaded.
+     */
+    try {
+        const response = await fetch('/api/calibration/stability');
+        const data = await response.json();
+
+        const card = document.getElementById('stability-card');
+        const badge = document.getElementById('stability-status-badge');
+
+        if (data.status === 'not_run') {
+            card.classList.remove('hidden');
+            badge.textContent = 'Not Calibrated';
+            badge.className = 'badge badge-warning gap-2';
+            document.getElementById('stat-diagonal-topk').textContent = '-';
+            document.getElementById('stat-jaccard').textContent = '-';
+            document.getElementById('stat-stable').textContent = '-';
+            document.getElementById('stat-unstable').textContent = '-';
+            return;
+        }
+
+        card.classList.remove('hidden');
+        badge.textContent = 'Calibrated';
+        badge.className = 'badge badge-success gap-2';
+
+        // Display metrics (use calibration-based metrics from training data)
+        // low_crossfire_rate: % of lenses with <10% cross-fire (stable)
+        // good_gap_rate: % of lenses with >0.2 signal gap (discriminative)
+        const lowCfr = data.low_crossfire_rate ?? data.diagonal_in_topk_rate ?? 0;
+        const goodGap = data.good_gap_rate ?? data.jaccard_mean ?? 0;
+
+        document.getElementById('stat-diagonal-topk').textContent =
+            `${(lowCfr * 100).toFixed(1)}%`;
+
+        document.getElementById('stat-jaccard').textContent =
+            `${(goodGap * 100).toFixed(1)}%`;
+
+        document.getElementById('stat-stable').textContent = data.stable_count;
+        document.getElementById('stat-unstable').textContent = data.unstable_count;
+
+        // Show over-firing concepts if any
+        if (data.over_firing && data.over_firing.length > 0) {
+            const alertEl = document.getElementById('over-firing-alert');
+            const listEl = document.getElementById('over-firing-list');
+            listEl.textContent = data.over_firing.slice(0, 5).join(', ');
+            alertEl.classList.remove('hidden');
+        }
+
+        console.log('Stability metrics loaded:', data);
+
+    } catch (error) {
+        console.error('Failed to load stability metrics:', error);
+    }
+}
+
+// ============================================================================
 // Initialize
 // ============================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     checkStatus();
     setInterval(checkStatus, 30000);
+
+    // Load stability metrics if lens is already loaded
+    loadStabilityMetrics();
 });

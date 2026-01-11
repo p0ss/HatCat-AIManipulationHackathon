@@ -6,6 +6,7 @@ import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
+import copy
 from typing import AsyncGenerator, List, Optional
 
 from fastapi import APIRouter, HTTPException, Query
@@ -67,6 +68,57 @@ def _select_suite(suite_id: Optional[str]) -> Optional[dict]:
         return None
 
     return suites[0]
+
+
+def _build_preview_turns(episode: dict) -> List[dict]:
+    preview = []
+
+    roles = episode.get("roles") or {}
+    if isinstance(roles, dict):
+        system_role = roles.get("system")
+        if system_role:
+            preview.append({
+                "turn_id": "role_system",
+                "speaker": "system",
+                "content": system_role,
+            })
+
+    setup = episode.get("setup") or {}
+    if isinstance(setup, dict):
+        context = setup.get("context")
+        if context:
+            preview.append({
+                "turn_id": "setup_context",
+                "speaker": "setup",
+                "content": context,
+                "meta": "setup_context",
+            })
+
+        temptation = setup.get("temptation")
+        if isinstance(temptation, dict) and temptation:
+            parts = []
+            t_type = temptation.get("type")
+            if t_type:
+                parts.append(f"Temptation type: {t_type.replace('_', ' ')}")
+            description = temptation.get("description") or temptation.get("notes")
+            if description:
+                parts.append(description)
+            metric = temptation.get("metric")
+            if metric:
+                parts.append(f"Metric: {metric}")
+            incentive = temptation.get("incentive")
+            if incentive:
+                parts.append(f"Incentive: {incentive}")
+            if parts:
+                preview.append({
+                    "turn_id": "setup_temptation",
+                    "speaker": "setup",
+                    "content": " ".join(parts),
+                    "meta": "setup_temptation",
+                })
+
+    preview.extend(episode.get("turns", []))
+    return preview
 
 
 def get_state():
@@ -174,7 +226,9 @@ async def get_episode(episode_id: str, suite_id: Optional[str] = Query(None)):
 
     for ep in suite.get("episodes", []):
         if ep.get("id") == episode_id:
-            return ep
+            episode_copy = copy.deepcopy(ep)
+            episode_copy["preview_turns"] = _build_preview_turns(ep)
+            return episode_copy
 
     raise HTTPException(status_code=404, detail=f"Episode {episode_id} not found in suite {suite.get('id')}")
 
@@ -291,9 +345,9 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
                 "conditions": {},
             }
 
-            # Send episode turns for display
-            turns = episode.get("turns", [])
-            yield f"data: {json.dumps({'type': 'episode_turns', 'episode_id': episode['id'], 'turns': turns})}\n\n"
+            # Send episode turns for display (include setup/system context)
+            preview_turns = _build_preview_turns(episode)
+            yield f"data: {json.dumps({'type': 'episode_turns', 'episode_id': episode['id'], 'turns': preview_turns})}\n\n"
 
             for condition in conditions:
                 # Parse condition to get base condition and steering flag
@@ -360,25 +414,28 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
                     }
 
                     # Add violations details (ASK schema)
+                    # Note: HushViolation.to_dict() returns simplex_term, current_deviation
                     if hasattr(token_meta, 'violations') and token_meta.violations:
                         metadata['violations'] = [
                             {
-                                'constraint': v.get('constraint', 'unknown'),
-                                'simplex': v.get('simplex', ''),
-                                'deviation': round(v.get('deviation', 0), 4) if v.get('deviation') else 0,
-                                'threshold': round(v.get('threshold', 0), 4) if v.get('threshold') else 0,
+                                'constraint': v.get('simplex_term', v.get('constraint', 'unknown')),
+                                'simplex': v.get('simplex_term', v.get('simplex', '')),
+                                'deviation': round(v.get('current_deviation', v.get('deviation', 0)), 4),
+                                'threshold': round(v.get('max_deviation', v.get('threshold', 0)), 4),
                             }
                             for v in token_meta.violations[:5]  # Limit to top 5
                         ]
 
                     # Add steering details (ASK schema)
+                    # Note: SteeringDirective.to_dict() returns simplex_term, concept_to_suppress, concept_to_amplify
                     if hasattr(token_meta, 'steering_applied') and token_meta.steering_applied:
                         metadata['steering_applied'] = [
                             {
-                                'concept': s.get('concept', s.get('simplex', 'unknown')),
+                                'concept': s.get('concept_to_suppress', s.get('simplex_term', s.get('concept', 'unknown'))),
+                                'contrastive': s.get('concept_to_amplify', ''),
                                 'action': s.get('action', 'steer'),
                                 'strength': round(s.get('strength', 0), 4) if s.get('strength') else 0,
-                                'direction': s.get('direction', 'suppress'),
+                                'direction': 'suppress' if s.get('concept_to_suppress') else s.get('direction', 'amplify'),
                             }
                             for s in token_meta.steering_applied[:5]  # Limit to top 5
                         ]
@@ -479,31 +536,33 @@ async def evaluation_generator(request: RunRequest) -> AsyncGenerator[str, None]
                             }
 
                         # WorldTick has steering_applied: List[Dict[str, Any]]
+                        # Note: SteeringDirective.to_dict() returns simplex_term, concept_to_suppress, concept_to_amplify
                         steering = getattr(tick, 'steering_applied', None)
                         if steering and len(steering) > 0:
                             tick_info['steering_active'] = True
                             tick_info['steering_applied'] = [
                                 {
-                                    'concept': s.get('concept', s.get('simplex', 'unknown')),
+                                    'concept': s.get('concept_to_suppress', s.get('simplex_term', s.get('concept', 'unknown'))),
                                     'action': s.get('action', 'steer'),
                                     'strength': round(s.get('strength', 0), 4) if s.get('strength') else 0,
-                                    'direction': s.get('direction', 'suppress'),
-                                    'contrastive': s.get('contrastive_concept', s.get('contrastive', '')),
+                                    'direction': 'suppress' if s.get('concept_to_suppress') else s.get('direction', 'amplify'),
+                                    'contrastive': s.get('concept_to_amplify', s.get('contrastive_concept', '')),
                                 }
                                 for s in steering
                             ]
 
                         # Violations (constraint breaches that triggered steering)
+                        # Note: HushViolation.to_dict() returns simplex_term, current_deviation
                         violations = getattr(tick, 'violations', None)
                         if violations and len(violations) > 0:
                             tick_info['safety_intensity'] = max(tick_info['safety_intensity'], 0.5)
                             tick_info['violations'] = [
                                 {
-                                    'constraint': v.get('constraint', v.get('constraint_id', 'unknown')),
-                                    'simplex': v.get('simplex', v.get('simplex_term', '')),
-                                    'deviation': round(v.get('deviation', 0), 4) if v.get('deviation') else 0,
-                                    'threshold': round(v.get('threshold', v.get('max_deviation', 0)), 4),
-                                    'severity': v.get('severity', 'medium'),
+                                    'constraint': v.get('simplex_term', v.get('constraint', 'unknown')),
+                                    'simplex': v.get('simplex_term', v.get('simplex', '')),
+                                    'deviation': round(v.get('current_deviation', v.get('deviation', 0)), 4),
+                                    'threshold': round(v.get('max_deviation', v.get('threshold', 0)), 4),
+                                    'severity': v.get('priority', v.get('severity', 'medium')),
                                 }
                                 for v in violations
                             ]
