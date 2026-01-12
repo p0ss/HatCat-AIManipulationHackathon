@@ -8,7 +8,7 @@ Built on the [HatCat FTW](https://github.com/HatCatFTW/HatCat) interpretability 
 
 The tool covers six manipulation categories: **sycophancy**, **strategic deception**, **sandbagging**, **reward hacking**, **dark patterns**, and **persuasive manipulation**.
 
-It combines concept-based mechanistic monitoring (HatCat FTW), optional concept-level steering (HUSH), and tamper-evident logging and reporting (ASK), behind a simple dashboard.
+It combines concept-based mechanistic monitoring (HatCat FTW), optional [concept-level steering](https://github.com/p0ss/HatCat/blob/main/docs/results/BEHAVIORAL_STEERING_RESULTS.md) (HUSH), and tamper-evident logging and reporting (ASK), behind a simple dashboard.
 
 ### Experimental Conditions
 
